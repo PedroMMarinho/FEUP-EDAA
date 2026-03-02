@@ -1,0 +1,87 @@
+\documentclass{beamer}
+
+% Using your requested theme and color
+\usetheme{Szeged}
+\usecolortheme{beaver}
+
+% --- Presentation Info ---
+\title{Fibonacci Heap}
+\subtitle{TODO add subtitle}
+\author{Pedro Marinho \and Miguel Mateus \and Tuomas Haapasalo}
+\institute{University of Porto FEUP}
+\date{TODO Put Correct date}
+
+% Removes the small navigation icons at the bottom right
+\setbeamertemplate{navigation symbols}{}
+
+\begin{document}
+
+% --- Title Slide ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- 1. OUTLINE (1 dot) ---
+\section{Outline}
+\begin{frame}{Outline}
+  % sections={2-8} ensures the "Outline" section doesn't list itself
+  \tableofcontents[sections={2-8}]
+\end{frame}
+
+% --- AUTOMATED TOPIC TRANSITIONS ---
+% Placing this here means it will automatically generate the grayed-out 
+% transition slide for every section AFTER the Outline.
+\AtBeginSection[]
+{
+  \begin{frame}{Outline}
+    % currentsection highlights the active topic and fades the rest
+    \tableofcontents[currentsection, sections={2-8}]
+  \end{frame}
+}
+
+% --- 2. MOTIVATION (2 dots) ---
+\section{Motivation}
+\begin{frame}{Motivation - Slide 1}\end{frame}
+\begin{frame}{Motivation - Slide 2}\end{frame}
+
+% --- 3. DATA STRUCTURE BASIS (7 dots) ---
+\section{Data Structure Basis}
+\begin{frame}{Data Structure Basis - Slide 1}\end{frame}
+\begin{frame}{Data Structure Basis - Slide 2}\end{frame}
+\begin{frame}{Data Structure Basis - Slide 3}\end{frame}
+
+
+% --- 4. OPERATIONS (9 dots) ---
+\section{Operations}
+\begin{frame}{Operations - Slide 1}\end{frame}
+\begin{frame}{Operations - Slide 2}\end{frame}
+\begin{frame}{Operations - Slide 3}\end{frame}
+\begin{frame}{Operations - Slide 4}\end{frame}
+\begin{frame}{Operations - Slide 5}\end{frame}
+
+
+% --- 5. APPLICATIONS (4 dots) ---
+\section{Applications}
+\begin{frame}{Applications - Slide 1}\end{frame}
+\begin{frame}{Applications - Slide 2}\end{frame}
+\begin{frame}{Applications - Slide 3}\end{frame}
+\begin{frame}{Applications - Slide 4}\end{frame}
+
+% --- 6. EXAMPLE (4 dots) ---
+\section{Example}
+\begin{frame}{Example - Slide 1}\end{frame}
+\begin{frame}{Example - Slide 2}\end{frame}
+\begin{frame}{Example - Slide 3}\end{frame}
+\begin{frame}{Example - Slide 4}\end{frame}
+
+% --- 7. CONCLUSIONS (2 dots) ---
+\section{Conclusions}
+\begin{frame}{Conclusions - Slide 1}\end{frame}
+\begin{frame}{Conclusions - Slide 2}\end{frame}
+
+% --- 8. REFERENCES (2 dots) ---
+\section{References}
+\begin{frame}{References - Slide 1}\end{frame}
+\begin{frame}{References - Slide 2}\end{frame}
+
+\end{document}

@@ -139,6 +139,51 @@
 \end{frame}
 
 
+\begin{frame}[c]{The Fibonacci Heap}{Tracking the Minimum}
+
+  \vspace{0.6cm}
+  
+  To quickly access the minimum element without searching the structure:
+  
+  \vspace{0.1cm}
+  
+  \begin{itemize}
+    \item A single global pointer, referred to as $min$, is maintained at all times
+    \item This pointer always directs to the root node containing the absolute minimum key in the entire forest
+    \item This direct access guarantees that finding the minimum element takes a worst-case time of $O(1)$
+  \end{itemize}
+  
+  \vspace{0.4cm}
+  
+  \begin{center}
+    
+  \end{center}
+
+\end{frame}
+
+
+\begin{frame}[c]{The Lazy Philosophy}
+
+  \vspace{0.6cm}
+  
+  The core design of this data structure relies heavily on intentionally delaying computational work
+  
+  \vspace{0.1cm}
+  
+  \begin{itemize}
+    \item When inserting nodes or decreasing keys, the heap entirely avoids immediate restructuring
+    \item New or modified nodes are simply added to the root list in constant $O(1)$ time
+    \item Structural cleanup and tree merging are delayed until the extract-minimum operation is specifically called
+  \end{itemize}
+  
+  \vspace{0.4cm}
+  
+  \begin{center}
+    
+  \end{center}
+
+\end{frame}
+
 % --- 4. OPERATIONS (9 dots) ---
 \section{Operations}
 \begin{frame}{Operations - Slide 1}\end{frame}
@@ -176,11 +221,6 @@
     Michael L. Fredman and Robert Endre Tarjan.
     \newblock Fibonacci heaps and their uses in improved network optimization algorithms.
     \newblock \emph{Journal of the ACM}, 34(3):596--615, 1987.
-    
-    \bibitem{cormen2009}
-    Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, and Clifford Stein.
-    \newblock \emph{Introduction to Algorithms, Third Edition}.
-    \newblock MIT Press, 2009.
     
   \end{thebibliography}
 \end{frame}

@@ -8,13 +8,14 @@
 \title{Fibonacci Heap}
 \subtitle{Outperforming Traditional Priority Queues}
 \author{Pedro Marinho \and Miguel Mateus \and Tuomas Haapasalo}
-\institute{University of Porto FEUP}
+\institute{FEUP}
 \date{March 23, 2026}
 
 % Removes the small navigation icons at the bottom right
 \setbeamertemplate{navigation symbols}{}
 \setbeamertemplate{itemize items}[triangle]
 \setbeamercolor{itemize item}{fg=black}
+\setbeamercolor{itemize subitem}{fg=black}
 \begin{document}
 
 % --- Title Slide ---
@@ -57,12 +58,85 @@
   Currently, the effects of logarithmic slowness are much more visible! The number of edges in dense networks vastly exceeds the vertices, making priority updates the dominant computing cost \cite{fredman1987}.
 \end{frame}
 
-
-% --- 3. DATA STRUCTURE BASIS (7 dots) ---
 \section{Data Structure Basis}
-\begin{frame}{Data Structure Basis - Slide 1}\end{frame}
-\begin{frame}{Data Structure Basis - Slide 2}\end{frame}
-\begin{frame}{Data Structure Basis - Slide 3}\end{frame}
+\begin{frame}[c]{The Fibonacci Heap}{Definition}
+  
+  \vspace{0.4cm}
+
+  The Fibonacci heap is a data structure consisting of a collection,
+  or forest, of min-heap ordered trees, such that:
+  
+  \vspace{0.1cm}
+  
+  \begin{itemize}
+    \item Every parent node maintains a key value that is less than or equal to the values of its children
+    \item The absolute minimum element of any individual tree will always be found at its root
+    \item The trees in this forest do not need to maintain a rigid or balanced shape
+  \end{itemize}
+  
+  \vspace{0.4cm}
+  
+  \begin{center}
+    
+  \end{center}
+
+\end{frame}
+
+\begin{frame}[c]{The Fibonacci Heap}{Anatomy of a Node}
+
+  \vspace{0.4cm}
+
+  Each node $x$ in the heap contains several important attributes:
+  
+  \vspace{0.1cm}
+  
+  \begin{itemize}
+    \item $x.key$: Priority value of the element
+    \item $x.degree$: Number of direct children the node possesses
+    \item Pointers:
+      \begin{itemize}
+        \item Vertical: $x.parent$ and $x.child$ (points to any one of its children)
+        \item Horizontal: $x.left$ and $x.right$ (connects to adjacent siblings)
+      \end{itemize}
+    \item $x.mark$: A boolean value indicating whether the node has lost a child since it was last made the child of another node
+  \end{itemize}
+
+  \vspace{0.2cm}
+  \begin{center}
+    
+  \end{center}
+
+\end{frame}
+
+
+\begin{frame}[c]{The Fibonacci Heap}{Circular Doubly Linked Lists}
+
+  \vspace{0.4cm}
+  
+  To organize the nodes efficiently, this data structure relies on circular doubly linked lists
+  
+  \vspace{0.1cm}
+  
+  \begin{itemize}
+    \item All siblings, which are children of the same parent, are connected to each other in a continuous loop
+    \item The roots of all the trees in the forest are also linked together to form a global root list
+  \end{itemize}
+  
+  \vspace{0.4cm}
+  
+  {\large \textcolor{darkred}{Why this matters}}
+  
+  \vspace{0.1cm}
+  
+  This way of organizing allows us to more easily manage and compute operations, such as insertion or key decrease, in an amortized time of $O(1)$.
+  
+  \vspace{0.2cm}
+  
+  \begin{center}
+    
+  \end{center}
+
+\end{frame}
 
 
 % --- 4. OPERATIONS (9 dots) ---

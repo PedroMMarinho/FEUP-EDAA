@@ -6,14 +6,15 @@
 
 % --- Presentation Info ---
 \title{Fibonacci Heap}
-\subtitle{TODO add subtitle}
+\subtitle{Outperforming Traditional Priority Queues}
 \author{Pedro Marinho \and Miguel Mateus \and Tuomas Haapasalo}
 \institute{University of Porto FEUP}
-\date{TODO Put Correct date}
+\date{March 23, 2026}
 
 % Removes the small navigation icons at the bottom right
 \setbeamertemplate{navigation symbols}{}
-
+\setbeamertemplate{itemize items}[triangle]
+\setbeamercolor{itemize item}{fg=black}
 \begin{document}
 
 % --- Title Slide ---
@@ -22,8 +23,8 @@
 \end{frame}
 
 % --- 1. OUTLINE (1 dot) ---
-\section{Outline}
-\begin{frame}{Outline}
+\section{Overview}
+\begin{frame}{Overview}
   % sections={2-8} ensures the "Outline" section doesn't list itself
   \tableofcontents[sections={2-8}]
 \end{frame}
@@ -33,16 +34,29 @@
 % transition slide for every section AFTER the Outline.
 \AtBeginSection[]
 {
-  \begin{frame}{Outline}
+  \begin{frame}{Overview}
     % currentsection highlights the active topic and fades the rest
     \tableofcontents[currentsection, sections={2-8}]
   \end{frame}
 }
 
-% --- 2. MOTIVATION (2 dots) ---
+% --- 2. MOTIVATION (1 dot) ---
 \section{Motivation}
-\begin{frame}{Motivation - Slide 1}\end{frame}
-\begin{frame}{Motivation - Slide 2}\end{frame}
+
+\begin{frame}{Motivation}
+  \begin{itemize}
+    \item Efficient priority queues are a key problem in the context of graph algorithm design.
+    \item There is an increased need for processing massive networks, but the repeated cost of updating node priorities poses a huge bottleneck!
+    \item Demand for priority queue designs capable of extremely fast updates, but that can simultaneously keep other standard operations efficient.
+  \end{itemize}
+  
+  \vspace{0.2cm}
+  {\large \textcolor{darkred}{The $O(\log n)$ Bound}}
+  
+  \vspace{0.1cm}
+  Currently, the effects of logarithmic slowness are much more visible! The number of edges in dense networks vastly exceeds the vertices, making priority updates the dominant computing cost \cite{fredman1987}.
+\end{frame}
+
 
 % --- 3. DATA STRUCTURE BASIS (7 dots) ---
 \section{Data Structure Basis}
@@ -81,7 +95,19 @@
 
 % --- 8. REFERENCES (2 dots) ---
 \section{References}
-\begin{frame}{References - Slide 1}\end{frame}
-\begin{frame}{References - Slide 2}\end{frame}
-
+\begin{frame}{References}
+  \begin{thebibliography}{99}
+    
+    \bibitem{fredman1987}
+    Michael L. Fredman and Robert Endre Tarjan.
+    \newblock Fibonacci heaps and their uses in improved network optimization algorithms.
+    \newblock \emph{Journal of the ACM}, 34(3):596--615, 1987.
+    
+    \bibitem{cormen2009}
+    Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, and Clifford Stein.
+    \newblock \emph{Introduction to Algorithms, Third Edition}.
+    \newblock MIT Press, 2009.
+    
+  \end{thebibliography}
+\end{frame}
 \end{document}

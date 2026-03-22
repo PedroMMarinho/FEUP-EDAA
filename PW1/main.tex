@@ -1,0 +1,533 @@
+\documentclass{beamer}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+\usepackage{pgffor}
+% Using your requested theme and color
+\usetheme{Szeged}
+% Changed from beaver to whale because professor wants blue
+\usecolortheme{whale}
+
+% --- Presentation Info ---
+\title{Fibonacci Heap}
+\subtitle{Outperforming Traditional Priority Queues}
+\author{Pedro Marinho \and Miguel Mateus \and Tuomas Haapasalo}
+\institute{FEUP}
+\date{March 23, 2026}
+
+
+% Removes the small navigation icons at the bottom right
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{itemize items}[triangle]
+\setbeamercolor{itemize item}{fg=black}
+\setbeamercolor{itemize subitem}{fg=black}
+\setbeamercolor{enumerate item}{fg=structure}
+\setbeamercolor{caption name}{fg=structure}
+\setbeamertemplate{caption}[numbered]
+
+\begin{document}
+
+% --- Title Slide ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- 1. OUTLINE (1 dot) ---
+\section{Outline}
+\begin{frame}{Outline}
+  % sections={2-8} ensures the "Outline" section doesn't list itself
+  \tableofcontents[sections={2-9}]
+\end{frame}
+
+% --- AUTOMATED TOPIC TRANSITIONS ---
+% Placing this here means it will automatically generate the grayed-out 
+% transition slide for every section AFTER the Outline.
+\AtBeginSection[]
+{
+  \begin{frame}{Outline}
+    % currentsection highlights the active topic and fades the rest
+    \tableofcontents[currentsection, sections={2-9}]
+  \end{frame}
+}
+
+% --- 2. MOTIVATION (2 dots) ---
+\section{Contextualization}
+
+\begin{frame}{Contextualization - Priority Queue}
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/priority_queue_example.jpg}
+    \caption{Priority queue}
+    \label{fig:priority_queue}
+\end{figure}
+\begin{itemize}
+    \item Elements have a priority
+    \item Higher priority is served first
+\end{itemize}
+Fibonacci heaps implement priority queues with efficient operations.
+\end{frame}
+
+\begin{frame}{Contextualization - Binary Heap}
+\begin{columns}
+
+\column{0.5\textwidth}
+Binary trees are typically used to implement priority queues. They have two distinct properties:
+\begin{enumerate}
+    \item \textit{Shape property}: Every level is full. Last one from left to right.
+    \item \textit{Head property}: No child is smaller than its parents.
+\end{enumerate}
+
+\column{0.5\textwidth}
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/binary_tree_example.jpg}
+    \caption{Binary Min Heap}
+    \label{fig:binary_tree}
+\end{figure}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Contextualization - Runtime}
+\begin{columns}
+    \column{0.5\textwidth}
+    \textbf{Binary Heap}
+    \begin{itemize}
+        \item \textbf{Insert: } \(O(1)\)
+        \item \textbf{GetMin: } \(O(\log n)\)
+        \item \textbf{ExtractMin: } \(O(\log n)\)
+        \item \textbf{DecreaseKey: } \(O(\log n)\)
+    \end{itemize}
+    \column{0.5\textwidth}
+    \textbf{Fibonacci Heap}
+    \begin{itemize}
+        \item \textbf{Insert: } \(O(1)\)
+        \item \textbf{GetMin: } \(O(1)\)
+        \item \textbf{ExtractMin: } \(O(\log n)\)
+        \item \textbf{DecreaseKey: } \(O(1)\)
+    \end{itemize}
+\end{columns}
+-\\
+
+\textbf{Note:} Fibonacci Heaps are generally considered only useful when the datasets are huge. Thus, they are seldom implemented as they are complicated.
+
+\end{frame}
+
+
+% --- 3. DATA STRUCTURE BASIS (7 dots) ---
+
+\section{Definition}
+\begin{frame}{Definition - Tree structure}
+\begin{itemize}
+    \item The Fibonacci heap is a collection of min-heap trees, such that the \textit{Shape property} of binary trees is relaxed.
+    \item We only keep the \textit{Heap property}: no child is smaller than its parents. 
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Definition - Tree structure}
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/fib-frame 1.jpg}
+    \caption{Fibonacci Heap}
+    \label{fig:fibonacci_heap}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Definition - Tree structure Implementation}
+\begin{figure}
+\centering
+\includegraphics[width=\textwidth]{figures/fib-frame 2.jpg}
+    \caption{Fibonacci Heap implementation}
+    \label{fig:fibonacci_heap_2}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Definition - Tree structure Implementation}
+\begin{figure}
+\centering
+\includegraphics[width=\textwidth]{figures/fib-frame 3.jpg}
+    \caption{Fibonacci Heap implementation}
+    \label{fig:fibonacci_heap_3}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Definition - Tree structure Implementation}
+\begin{figure}
+\centering
+\includegraphics[width=\textwidth]{figures/fib-frame 4.jpg}
+    \caption{Fibonacci Heap implementation}
+    \label{fig:fibonacci_heap_4}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Definition - Tree structure Implementation}
+\begin{figure}
+\centering
+\includegraphics[width=\textwidth]{figures/fib-frame 5.jpg}
+    \caption{Fibonacci Heap implementation}
+    \label{fig:fibonacci_heap_5}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Definition - Tree structure Implementation}
+\begin{figure}
+\centering
+\includegraphics[width=\textwidth]{figures/fib-frame 6.jpg}
+    \caption{Fibonacci Heap implementation}
+    \label{fig:fibonacci_heap_6}
+\end{figure}
+\end{frame}
+
+
+\begin{frame}{Definition - Node properties Implementation}
+Each node \(x\) in the heap contains several important attributes:
+\begin{figure}
+    \centering
+\includegraphics[width=\textwidth]{figures/node_properties.jpg}
+    \caption{Node properties}
+    \label{fig:node_properties}
+\end{figure}
+
+\end{frame}
+
+
+
+% --- 4. OPERATIONS (9 dots) ---
+\section{Operations}
+
+\begin{frame}{Operations - Overview}
+    We will focus on the three operations that define its unique architecture:
+    \begin{itemize}
+        \item \textbf{Insert:} Adding a new element to the heap.
+        \item \textbf{Extract-Minimum:} Removing the minimum element.
+        \item \textbf{Decrease-Key:} Lowering a node's priority.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Operations - Insert}{Pseudocode}
+    \begin{algorithmic}[1]
+        \Function{Fibonacci-Heap-Insert}{$H, x$}
+            \State $degree[x] \gets 0$
+            \State $p[x] \gets \textbf{NIL}$
+            \State $child[x] \gets \textbf{NIL}$
+            \State $left[x] \gets x$
+            \State $right[x] \gets x$
+            \State $mark[x] \gets \textbf{FALSE}$
+            \State concatenate the root list containing $x$ with root list $H$
+            \If{$min[H] == \textbf{NIL}$ \textbf{or} $key[x] < key[min[H]]$}
+                \State $min[H] \gets x$
+            \EndIf
+            \State $n[H] \gets n[H] + 1$
+        \EndFunction
+    \end{algorithmic}
+\end{frame}
+
+\begin{frame}{Operations - Insert}{Showcase}
+    \begin{figure}
+        \centering
+        \includegraphics<1>[width=\textwidth, height=0.65\textheight, keepaspectratio]{figures/insert-1.jpg}        
+        \includegraphics<2>[width=\textwidth, height=0.65\textheight, keepaspectratio]{figures/insert-2.jpg}        
+        \includegraphics<3>[width=\textwidth]{figures/insert-3.jpg}
+        \includegraphics<4>[width=\textwidth]{figures/insert-4.jpg}
+        \includegraphics<5>[width=\textwidth]{figures/insert-5.jpg}
+        \caption{Insert Operation}
+        \label{fig:insert_op}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Operations - Extract-Min}{Pseudocode}
+    \scriptsize
+    \begin{algorithmic}[1]
+        \Function{Fibonacci-Heap-Extract-Min}{$H$}
+            \State $z \gets min[H]$
+            \If{$z \neq \textbf{NIL}$}
+                \For{\textbf{each} child $x$ of $z$}
+                    \State add $x$ to the root list of $H$
+                    \State $p[x] \gets \textbf{NIL}$
+                \EndFor
+                \State remove $z$ from the root list of $H$
+                \If{$z == right[z]$}
+                    \State $min[H] \gets \textbf{NIL}$
+                \Else
+                    \State $min[H] \gets right[z]$
+                    \State \Call{Consolidate}{$H$}
+                \EndIf
+                \State $n[H] \gets n[H] - 1$
+            \EndIf
+            \State \Return $z$
+        \EndFunction
+    \end{algorithmic}
+\end{frame}
+
+\begin{frame}{Operations - Extract-Min}{Showcase}
+    \begin{figure}
+        \centering
+        \foreach \i in {1,...,31} {
+            \only<\i>{%
+                \includegraphics[width=\textwidth, height=0.65\textheight, keepaspectratio]{figures/extract-min-\i.jpg}%
+            }
+        }
+        \caption{Extract Min Operation}
+        \label{fig:extract_min_op}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Operations - Decrease-Key}{Pseudocode}
+    \begin{algorithmic}[1]
+        \Function{Fibonacci-Heap-Decrease-Key}{$H, x, k$}
+            \If{$k > key[x]$}
+                \State \textbf{error} ``new key is greater than current key''
+            \EndIf
+            \State $key[x] \gets k$
+            \State $y \gets p[x]$
+            \If{$y \neq \textbf{NIL}$ \textbf{and} $key[x] < key[y]$}
+                \State \Call{Cut}{$H, x, y$}
+                \State \Call{Cascading-Cut}{$H, y$}
+            \EndIf
+            \If{$key[x] < key[min[H]]$}
+                \State $min[H] \gets x$
+            \EndIf
+        \EndFunction        
+    \end{algorithmic}
+\end{frame}
+
+\begin{frame}{Operations - Decrease-Key}{Showcase}
+    \begin{figure}
+        \centering
+        \foreach \i in {1,...,30} {
+            \only<\i>{%
+                \includegraphics[width=\textwidth, height=0.65\textheight, keepaspectratio]{figures/decrease-key-\i.jpg}%
+            }
+        }
+        \caption{Decrease Key Operation}
+        \label{fig:extract_min_op}
+    \end{figure}
+\end{frame}
+
+
+% --- 5. APPLICATIONS (4 dots) ---
+\section{Applications}
+\begin{frame}{Applications}
+\begin{itemize}
+    \item Improve the complexity of the Dijkstra's algorithm \(O(E\log V)\rightarrow O(E + VlogV)\), e.g., Cisco.
+    \item Optimal for dense graphs in power grid and circuit design, specially in telecommunications companies.
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}{Applications}
+\begin{itemize}
+    \item Essential for Bio-informatics and Large-Scale Simulations for managing priority queues of genomic sequences, e.g., Wolfram Alpha.
+    \item Outperforms traditional queues in complex network flow by constantly re-adjusting delivery priorities in real-time, e.g., FedeX.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{The Trade-off}
+\begin{itemize}
+    \item Implementation speed vs. Time complexity
+    \item Memory usage vs. Speed
+\end{itemize}
+\end{frame}
+
+% --- 7. CONCLUSIONS (2 dots) ---
+\section{Conclusions}
+\begin{frame}{Conclusions}
+\begin{itemize}
+    \item Relaxed structure
+    \item Shows better efficiency improvements when handling large data
+    \item Complicated to code and has a high memory overhead due to multiple pointers per node
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}{Finally - Where does the name come from?}
+\begin{columns}
+\column{0.3\textwidth}
+    Why is it called the Fibonacci Heap?
+\column{0.7\textwidth}
+\begin{itemize}
+    \item The width and height of the heap must be restricted to preserve extract-min efficiency
+    \item This is done by imposing a constraint in the linking phase that a tree of degrees \(d\) has atleast \(F_{d+2}\) nodes, where \(F_d\) is the \(d\)-th Fibonacci number.
+\end{itemize}
+\end{columns}
+\end{frame}
+
+% --- 8. Questions & Answers (Q&A) --- 
+\section{Q\&A}
+
+\begin{frame}[plain]
+    \begin{center}
+        \includegraphics[width=\textwidth, height=1\paperheight, keepaspectratio]{figures/kermit.jpg}
+    \end{center}
+\end{frame}
+
+
+% --- 8. REFERENCES (2 dots) ---
+\section{References}
+\begin{frame}{References}
+    \setbeamertemplate{bibliography item}[article]
+    
+    \begin{thebibliography}{10}
+        
+        \bibitem{fredman1987}
+        Michael L. Fredman and Robert Endre Tarjan.
+        \newblock Fibonacci heaps and their uses in improved network optimization algorithms.
+        \newblock {\em Journal of the ACM}, 34(3):596--615, 1987.
+        
+        \vspace{0.2cm}
+        
+        \bibitem{wayne}
+        Kevin Wayne.
+        \newblock Fibonacci Heap Operation Algorithms.
+        \newblock {\em Princeton University}. \\ \url{https://www.cs.princeton.edu/~wayne/cs423/fibonacci/FibonacciHeapAlgorithm.html}
+        
+    \end{thebibliography}
+\end{frame}
+
+\begin{frame}{Finally - Where does the name come from?}
+\begin{itemize}
+    \item Fibonacci sequence grows exponentially \(\lim_{n\rightarrow \infty}\frac{F_{n+1}}{F_n}=\varphi \approx 1.618\)
+    \item The lower bound for a node with degree \(d\) can be expressed as \(n\geq F_{d+2} \approx \varphi^d\)
+    \item \(d\leq \log_{\varphi}n\)
+    \item \(d=O(\log n)\)
+\end{itemize}
+\end{frame}
+
+% Asymptotic Analysis
+\section{Asymptotic Analysis}
+
+\begin{frame}{Asymptotic Analysis - Insert}{General Case}
+    \small
+    \begin{tabular}{llcc}
+        \textbf{Line} & \textbf{Fibonacci-Heap-Insert($H, x$)} & \textbf{cost} & \textbf{times} \\
+        \hline
+        1 & $degree[x] \gets 0$ & $c_1$ & 1 \\
+        2 & $p[x] \gets \textbf{NIL}$ & $c_2$ & 1 \\
+        3 & $child[x] \gets \textbf{NIL}$ & $c_3$ & 1 \\
+        4 & $left[x] \gets x$ & $c_4$ & 1 \\
+        5 & $right[x] \gets x$ & $c_5$ & 1 \\
+        6 & $mark[x] \gets \textbf{FALSE}$ & $c_6$ & 1 \\
+        7 & concatenate root list containing $x$ with $H$ & $c_7$ & 1 \\
+        8 & \textbf{if} $min[H] == \textbf{NIL}$ \textbf{or} $key[x] < key[min[H]]$ & $c_8$ & 1 \\
+        9 & \quad $min[H] \gets x$ & $c_9$ & $t_9$ \\
+        10 & $n[H] \gets n[H] + 1$ & $c_{10}$ & 1 \\
+    \end{tabular}
+    
+    \vspace{0.5cm}
+    \textit{Note: $t_9$ is either $0$ or $1$ depending on the condition in line 8.}
+\end{frame}
+
+\begin{frame}{Asymptotic Analysis - Insert}{General Case}
+    We can express the total running time $T(n)$ by summing the products of the cost and times for each statement:
+    
+    $$T(n) = c_1 + c_2 + c_3 + c_4 + c_5 + c_6 + c_7 + c_8 + c_9 t_9 + c_{10}$$
+    
+    \vspace{0.5cm}
+    Because every $c_i$ is a constant and $t_9 \le 1$, the entire sum evaluates to a constant value, independent of the number of elements $n$ in the heap.
+    
+    \vspace{0.5cm}
+    Therefore, discarding the constants and focusing on the rate of growth, the operation is bounded tightly:
+    
+    $$T(n) = \Theta(1)$$
+\end{frame}
+
+% Asymptotic Analysis - Decrease Key (Best Case)
+\begin{frame}{Asymptotic Analysis - Decrease Key}{Best Case}
+    \small
+    \begin{tabular}{llcc}
+        \textbf{Line} & \textbf{Fibonacci-Heap-Decrease-Key($H, x, k$)} & \textbf{cost} & \textbf{times} \\
+        \hline
+        1 & \textbf{if} $k > key[x]$ & $c_1$ & 1 \\
+        2 & \quad \textbf{error} "new key is greater than current key" & $c_2$ & 0 \\
+        3 & $key[x] \gets k$ & $c_3$ & 1 \\
+        4 & $y \gets p[x]$ & $c_4$ & 1 \\
+        5 & \textbf{if} $y \neq \textbf{NIL}$ \textbf{and} $key[x] < key[y]$ & $c_5$ & 1 \\
+        6 & \quad \Call{Cut}{$H, x, y$} & $c_6$ & 0 \\
+        7 & \quad \Call{Cascading-Cut}{$H, y$} & $c_7$ & 0 \\
+        8 & \textbf{if} $key[x] < key[min[H]]$ & $c_8$ & 1 \\
+        9 & \quad $min[H] \gets x$ & $c_9$ & $t_9$ \\
+    \end{tabular}
+    
+    \vspace{0.5cm}
+    \textit{Note: In the best case, the min-heap property is not violated, $key[x] \ge key[y]$, so lines 6 and 7 execute $0$ times. $t_9$ is $0$ or $1$.}
+\end{frame}
+
+\begin{frame}{Asymptotic Analysis - Decrease Key}{Best Case}
+    We calculate the best-case running time $T(n)$ by summing the costs:
+    $$T(n) = c_1(1) + c_2(0) + c_3(1) + c_4(1) + c_5(1) + c_6(0) + c_7(0) + c_8(1) + c_9(t_9)$$
+    
+    $$T(n) = c_1 + c_3 + c_4 + c_5 + c_8 + c_9 t_9$$
+    \vspace{0.1cm}
+    We can group all these individual instruction costs ($c_k$) into a single constant $c$:
+    $$T(n) = c$$
+    \vspace{0.1cm}
+    In the best case, the running time is a constant function of $n$. Therefore, we can conclude that the best-case running time for decrease key is precisely bounded:
+    $$T(n) = \Theta(1)$$
+\end{frame}
+
+% Asymptotic Analysis - Extract Min (Worst Case)
+\begin{frame}{Asymptotic Analysis - Extract Min}{Worst Case}
+    \scriptsize
+    \begin{tabular}{llcc}
+        \textbf{Line} & \textbf{Fibonacci-Heap-Extract-Min($H$)} & \textbf{cost} & \textbf{times} \\
+        \hline
+        1 & $z \gets min[H]$ & $c_1$ & 1 \\
+        2 & \textbf{if} $z \neq \textbf{NIL}$ & $c_2$ & 1 \\
+        3 & \quad \textbf{for} each child $x$ of $z$ & $c_3$ & 1 \\
+        4 & \quad \quad add $x$ to root list, $p[x] \gets \textbf{NIL}$ & $c_4$ & 0 \\
+        5 & \quad remove $z$ from root list of $H$ & $c_5$ & 1 \\
+        6 & \quad \textbf{if} $z == right[z]$ & $c_6$ & 1 \\
+        7 & \quad \quad $min[H] \gets \textbf{NIL}$ & $c_7$ & 0 \\
+        8 & \quad \textbf{else} & $c_8$ & 1 \\
+        9 & \quad \quad $min[H] \gets right[z]$ & $c_9$ & 1 \\
+        10 & \quad \quad \Call{Consolidate}{H} & $c_{10}$ & $n$ \\
+        11 & \quad $n[H] \gets n[H] - 1$ & $c_{11}$ & 1 \\
+        12 & \textbf{return} $z$ & $c_{12}$ & 1 \\
+    \end{tabular}
+    
+    \vspace{0.2cm}
+    \textit{Note: The worst case occurs after $n$ consecutive inserts. The min node $z$ has $0$ children, so the loop at line 3 fails immediately (executing $1$ time for the check), and line 4 executes $0$ times. However, the root list has $n$ nodes. \Call{Consolidate}{H} must iterate through the remaining $n-1$ roots, making its internal execution time proportional to $n$.}
+\end{frame}
+
+\begin{frame}{Asymptotic Analysis - Extract Min}{Worst Case}
+    Summing the costs for the worst-case scenario:
+    
+    $$T(n) = c_1 + c_2 + c_3(1) + c_4(0) + c_5 + c_6 + c_8 + c_9 + c_{10}(n) + c_{11} + c_{12}$$
+    
+    \vspace{0.1cm}
+    We can group the constant costs that execute exactly once into a single constant $a$, and assign the cost associated with the \Call{Consolidate}{} iteration to $b$:
+    $$T(n) = bn + a$$
+    
+    \vspace{0.1cm}
+    In the worst case, the running time is a linear function of $n$. Just as we did in previous analyses, we focus on the order of growth by ignoring the constants $a$ and $b$:
+    $$T(n) = \Theta(n)$$
+\end{frame}
+
+\begin{frame}{Asymptotic Analysis - Consolidate Pseudocode}
+    \scriptsize
+    \begin{algorithmic}[1]
+        \Function{Consolidate}{$H$}
+            \State let $A[0 \dots D(n[H])]$ be a new array
+            \For{$i = 0$ \textbf{to} $D(n[H])$}
+                \State $A[i] \gets \textbf{NIL}$
+            \EndFor
+            \For{each node $w$ in the root list of $H$}
+                \State $x \gets w$
+                \State $d \gets degree[x]$
+                \While{$A[d] \neq \textbf{NIL}$}
+                    \State $y \gets A[d]$
+                    \If{$key[x] > key[y]$}
+                        \State exchange $x$ with $y$
+                    \EndIf
+                    \State \Call{Fibonacci-Heap-Link}{$H, y, x$}
+                    \State $A[d] \gets \textbf{NIL}$
+                    \State $d \gets d + 1$
+                \EndWhile
+                \State $A[d] \gets x$
+            \EndFor
+            \State \dots (reconstruct root list from $A$)
+        \EndFunction
+    \end{algorithmic}
+\end{frame}
+
+
+\end{document}

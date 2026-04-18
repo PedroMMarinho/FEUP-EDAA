@@ -12,3 +12,4 @@ Image Name,Resolution,Algorithm,Target Colors,Original Colors,Final Colors,Time 
 4.2.03,"(512, 512)",Octree-Baseline,100000,230427,100000,62.96544600081688
 4.2.03,"(512, 512)",Octree-Baseline,10000,230427,10000,12.623074999282835
 4.2.03,"(512, 512)",Octree-Baseline,10000,230427,10000,12.611092999577522
+4.2.03,"(512, 512)",Octree-Baseline,10000,230427,10000,12.653653000597842

@@ -3,10 +3,7 @@ import csv
 from utils.macros import CSV_FILE
 
 def load_image_data(filepath):
-    img = Image.open(filepath).convert('RGB')
-    width, height = img.size
-    pixels = list(img.getdata()) 
-    return width, height, pixels
+    return Image.open(filepath).convert('RGB')
 
 def save_output(image, output_path):
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -21,7 +18,7 @@ def save_to_csv(image_name, resolution, algorithm, target_colors, original_color
     with open(CSV_FILE, mode='a', newline='') as csvfile:
         fieldnames = [
                     'Image Name', 'Resolution', 'Algorithm', 
-                    'Target Colors', 'Original Colors', 'Final Colors', 'Time Taken (s)'
+                    'Target Colors', 'Original Colors', 'Final Colors', 'Time Taken (ms)'
                 ]       
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
@@ -35,7 +32,7 @@ def save_to_csv(image_name, resolution, algorithm, target_colors, original_color
                 'Target Colors': target_colors,
                 'Original Colors': original_colors,
                 'Final Colors': final_colors,
-                'Time Taken (s)': round(time_taken, 4) 
+                'Time Taken (ms)': time_taken * 1000 
             })
 
 def get_image_resolution(image_path):

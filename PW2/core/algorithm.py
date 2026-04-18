@@ -1,12 +1,17 @@
+import ctypes
+from pathlib import Path
+
 import numpy as np
 from PIL import Image
-from core.octree import Octree
+from core.py.octree import Octree
+from utils.macros import LIB_PATH
 
-def run_algorithm(algo: str, image_path: str, target_colors: int) -> Image.Image:
+
+def run_algorithm(algo: str, original_image: Image.Image, target_colors: int) -> Image.Image:
     print(f"Running {algo} algorithm with target colors: {target_colors}")
     match algo:
         case "Octree-Baseline":
-            return octree_baseline(image_path, target_colors)
+            return octree_baseline(original_image, target_colors)
         case "Greedy":
             return None
         case "Median-Cut":
@@ -18,32 +23,18 @@ def run_algorithm(algo: str, image_path: str, target_colors: int) -> Image.Image
         case _:
             raise ValueError(f"Unknown algorithm: {algo}")
 
-def octree_baseline(image_path: str, target_colors: int) -> Image.Image:
-    img = Image.open(image_path).convert('RGB')
-    pixels = np.array(img, dtype=int)
-    height, width, _ = pixels.shape
+# --- 1. Octree Baseline Implementation 
+lib = ctypes.CDLL(str(LIB_PATH))
+lib.octree_quantize_baseline.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_int, ctypes.c_int]
 
-    octree = Octree(max_depth=8)
-
-    for y in range(height):
-        for x in range(width):
-            r, g, b = pixels[y, x]
-            octree.insert(r, g, b)
-
-            while octree.leaf_count > target_colors:
-                octree.reduce_tree()
-
-    while octree.leaf_count > target_colors:
-        octree.reduce_tree()
-
-   
-    new_pixels = np.zeros_like(pixels)
+def octree_baseline(original_image: Image.Image, target_colors: int) -> Image.Image:
     
-    for y in range(height):
-        for x in range(width):
-            r, g, b = pixels[y, x]
-            new_color = octree.get_mapped_color(r, g, b) 
-            
-            new_pixels[y, x] = [int(new_color[0]), int(new_color[1]), int(new_color[2])]
-
-    return Image.fromarray(new_pixels.astype('uint8'), 'RGB')
+    pixels = np.ascontiguousarray(np.array(original_image, dtype=np.uint8))
+    
+    total_pixels = pixels.shape[0] * pixels.shape[1]
+    
+    pixel_ptr = pixels.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+    
+    lib.octree_quantize_baseline(pixel_ptr, total_pixels, target_colors)
+    
+    return Image.fromarray(pixels, 'RGB')

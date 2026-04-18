@@ -2,7 +2,7 @@ import time
 
 from pathlib import Path
 from core.algorithm import run_algorithm
-from utils.utils import get_image_color_count, get_image_resolution, save_output, save_to_csv
+from utils.utils import get_image_color_count, get_image_resolution, load_image_data, save_output, save_to_csv
 from utils.macros import ALGORITHMS, OUTPUT_DIR
 
 def process_target(input_path_str: str, target_colors: int):
@@ -29,10 +29,12 @@ def run(input_path: Path, output_base: Path, target_colors: int):
     clean_name = input_path.stem
     resolution = get_image_resolution(input_path)
     original_colors = get_image_color_count(input_path)
+
+    original_image = load_image_data(input_path)
     for algo in ALGORITHMS:
 
         start_time = time.perf_counter()
-        processed_image = run_algorithm(algo, input_path, target_colors)
+        processed_image = run_algorithm(algo, original_image, target_colors)
         end_time = time.perf_counter()
 
         time_taken = end_time - start_time

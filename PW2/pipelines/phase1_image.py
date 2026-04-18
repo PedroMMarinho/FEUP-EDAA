@@ -1,9 +1,9 @@
 from core.octree import Octree
-from utils import save_output
 from pathlib import Path
 import numpy as np
 from PIL import Image
-
+from core.algorithm import run_algorithm
+from utils.image_utils import load_image_data, save_output
 
 def process_target(input_path_str: str, target_colors: int):
     input_path   = Path(input_path_str)
@@ -25,26 +25,17 @@ def process_target(input_path_str: str, target_colors: int):
         print(f"Error: path '{input_path}' does not exist.")
 
 # All algorithms that will be implemented 
-algorithms = ["Greedy", "Random", "K-Means", "Median-Cut"]
+algorithms = [
+    "Octree-Baseline",  
+    #"Greedy",      
+    #"Median-Cut", 
+    #"K-Means", 
+    #"Uniform"          
+]
 
 def run(input_path: Path, output_base: Path, target_colors: int):
     clean_name = input_path.stem
     for algo in algorithms:
-        processed_image = run_algorithm(algo, target_colors)
-        output_base = output_base / algo / target_colors / f"{clean_name}.png"
-        save_output(processed_image, input_path, output_base, algo)
-
-
-def run_algorithm(algo: str, target_colors: int):
-    print(f"Running {algo} algorithm with target colors: {target_colors}")
-    match algo:
-        case "Greedy":
-            return greedy_algorithm(target_colors)
-        case "Random":
-            return random_algorithm(target_colors)
-        case "K-Means":
-            return kmeans_algorithm(target_colors)
-        case "Median-Cut":
-            return median_cut_algorithm(target_colors)
-        case _:
-            raise ValueError(f"Unknown algorithm: {algo}")
+        processed_image = run_algorithm(algo, input_path, target_colors)
+        final_output_path = output_base / algo / f"color_{target_colors}" / f"{clean_name}.png"
+        save_output(processed_image, final_output_path)

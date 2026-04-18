@@ -12,8 +12,6 @@ def main():
                         help="Target number of colors")
     
     args = parser.parse_args()
-    start_time = time.time()
-
     match args.phase:
         case 1:
             print(f"--- Starting Phase 1 ---")
@@ -25,9 +23,6 @@ def main():
             print("Phase 3 is not implemented yet.")
         case 4:
             print("Phase 4 is not implemented yet.")
-
-    elapsed_time = time.time() - start_time
-    print(f"\n--- Total Execution Time: {elapsed_time:.4f} seconds ---")
 
 if __name__ == "__main__":
     main()

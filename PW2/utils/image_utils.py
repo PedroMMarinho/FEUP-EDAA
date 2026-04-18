@@ -6,7 +6,7 @@ def load_image_data(filepath):
     pixels = list(img.getdata()) 
     return width, height, pixels
 
-def save_image_data(pixels, width, height, output_filepath):
-    img = Image.new('RGB', (width, height))
-    img.putdata(pixels)
-    img.save(output_filepath)
+def save_output(image, output_path):
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(output_path)
+    print(f"Saved output to: {output_path}")

@@ -8,13 +8,13 @@ def run_algorithm(algo: str, image_path: str, target_colors: int) -> Image.Image
         case "Octree-Baseline":
             return octree_baseline(image_path, target_colors)
         case "Greedy":
-            return NotImplementedError("Greedy algorithm not implemented yet.")
+            return None
         case "Median-Cut":
-            return NotImplementedError("Median-Cut algorithm not implemented yet.")
+            return None
         case "K-Means":
-            return NotImplementedError("K-Means algorithm not implemented yet.")
+            return None
         case "Uniform":
-            return NotImplementedError("Uniform algorithm not implemented yet.")
+            return None
         case _:
             raise ValueError(f"Unknown algorithm: {algo}")
 

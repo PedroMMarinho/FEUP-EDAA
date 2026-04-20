@@ -5,7 +5,7 @@ COLORS ?= 256
 
 # Compiler settings
 CXX = g++
-CXXFLAGS = -O3 -shared -fPIC
+CXXFLAGS = -O3 -shared -fPIC -fopenmp
 LIB_OUT = core/cpp/octree_lib.so
 SRC = core/cpp/octree.cpp
 

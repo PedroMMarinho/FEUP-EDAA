@@ -1,7 +1,19 @@
 # Default variables 
 IMG ?= assets/input/raw_images/sipi/4.2.03.tiff
-DIR ?= assets/input/raw_images/
+DIR ?= assets/input/raw_images/test_set/
 COLORS ?= 256
+
+# Compiler settings
+CXX = g++
+CXXFLAGS = -O3 -shared -fPIC
+LIB_OUT = core/cpp/octree_lib.so
+SRC = core/cpp/octree.cpp
+
+all: build
+
+build: $(SRC)
+	@echo "Compiling C++ Octree library..."
+	$(CXX) $(CXXFLAGS) -o $(LIB_OUT) $(SRC)
 
 phase1:
 	@echo "Running Phase 1 (Single Image)..."

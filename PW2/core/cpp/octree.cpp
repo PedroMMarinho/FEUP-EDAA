@@ -122,6 +122,7 @@ public:
 
 
 extern "C" {
+    // First Algorithm: Baseline Octree Quantization
     void octree_quantize_baseline(uint8_t* pixels, int num_pixels, int target_colors) {
         Octree tree(8);
 
@@ -145,4 +146,5 @@ extern "C" {
             pixels[i*3+2] = b;
         }
     }
+    // Second Algorithm:
 }

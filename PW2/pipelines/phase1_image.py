@@ -74,7 +74,7 @@ def run(input_path: Path, output_base: Path, target_colors: int, output_csv_path
     clean_name = input_path.stem
     resolution = get_image_resolution(input_path)
     original_colors = get_image_color_count(input_path)
-    n_run_times = 10
+    n_run_times = 5
 
     original_image = load_image_data(input_path)
 

@@ -9,6 +9,9 @@
 #include <cassert>
 #include <algorithm> 
 #include <cmath>   
+#include <numeric>
+#include <limits>
+#include <random>
 
 struct Color {
     int r, g, b;
@@ -219,5 +222,72 @@ extern "C" {
         }
 
         return total_distance / ((double)(N - 1) * (double)(N - 1));
-}
+    }
+
+    // K-Means Algorithm
+    void kmeans_quantize(uint8_t* pixels, int width, int height,
+                        int k, int max_iter, uint32_t seed)
+    {
+        int n = width * height;
+
+        std::vector<float> data(n * 3);
+        for (int i = 0; i < n * 3; ++i)
+            data[i] = (float)pixels[i];
+
+        std::mt19937 rng(seed);
+        std::vector<int> perm(n);
+        std::iota(perm.begin(), perm.end(), 0);
+        std::shuffle(perm.begin(), perm.end(), rng);
+
+        std::vector<float> centroids(k * 3);
+        for (int i = 0; i < k; ++i)
+            for (int c = 0; c < 3; ++c)
+                centroids[i * 3 + c] = data[perm[i] * 3 + c];
+
+        std::vector<int>   labels(n, 0);
+        std::vector<float> new_centroids(k * 3);
+        std::vector<int>   counts(k);
+
+        for (int iter = 0; iter < max_iter; ++iter) {
+
+            bool changed = false;
+            for (int i = 0; i < n; ++i) {
+                float best_dist = std::numeric_limits<float>::max();
+                int   best_k    = 0;
+                for (int j = 0; j < k; ++j) {
+                    float dr = data[i*3+0] - centroids[j*3+0];
+                    float dg = data[i*3+1] - centroids[j*3+1];
+                    float db = data[i*3+2] - centroids[j*3+2];
+                    float d  = dr*dr + dg*dg + db*db;
+                    if (d < best_dist) { best_dist = d; best_k = j; }
+                }
+                if (labels[i] != best_k) { labels[i] = best_k; changed = true; }
+            }
+            if (!changed) break;
+
+            std::fill(new_centroids.begin(), new_centroids.end(), 0.0f);
+            std::fill(counts.begin(), counts.end(), 0);
+            for (int i = 0; i < n; ++i) {
+                int j = labels[i];
+                new_centroids[j*3+0] += data[i*3+0];
+                new_centroids[j*3+1] += data[i*3+1];
+                new_centroids[j*3+2] += data[i*3+2];
+                counts[j]++;
+            }
+            for (int j = 0; j < k; ++j) {
+                if (counts[j] > 0) {
+                    centroids[j*3+0] = new_centroids[j*3+0] / counts[j];
+                    centroids[j*3+1] = new_centroids[j*3+1] / counts[j];
+                    centroids[j*3+2] = new_centroids[j*3+2] / counts[j];
+                }
+            }
+        }
+
+        for (int i = 0; i < n; ++i) {
+            int j = labels[i];
+            pixels[i*3+0] = (uint8_t)(centroids[j*3+0] + 0.5f);
+            pixels[i*3+1] = (uint8_t)(centroids[j*3+1] + 0.5f);
+            pixels[i*3+2] = (uint8_t)(centroids[j*3+2] + 0.5f);
+        }
+    }
 }

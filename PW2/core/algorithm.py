@@ -3,8 +3,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-from core.py.octree import Octree
-from utils.macros import LIB, LIB_PATH
+from utils.macros import LIB
 
 LIB.octree_quantize_baseline.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_int, ctypes.c_int]
 
@@ -14,9 +13,9 @@ def run_algorithm(algo: str, original_image: Image.Image, target_colors: int) ->
         case "Octree-Baseline":
             return octree_baseline(original_image, target_colors)
         case "Median-Cut":
-            return None
+            return median_cut(original_image, target_colors)
         case "K-Means":
-            return None
+            return kmeans(original_image, target_colors)
         case "Uniform":
             return None
         case _:
@@ -30,4 +29,37 @@ def octree_baseline(original_image: Image.Image, target_colors: int) -> Image.Im
     
     LIB.octree_quantize_baseline(pixel_ptr, total_pixels, target_colors)
     
+    return Image.fromarray(pixels, 'RGB')
+
+def median_cut(original_image: Image.Image, target_colors: int) -> Image.Image:
+
+    img_array = np.array(original_image, dtype=np.uint8)
+
+    quantized_array = (img_array >> 3) << 3
+    
+    temp_image = Image.fromarray(quantized_array, 'RGB')
+    
+
+    return temp_image.quantize(
+        colors=target_colors, 
+        method=Image.Quantize.MEDIANCUT, 
+        dither=Image.Dither.NONE
+    ).convert('RGB')
+
+
+LIB.kmeans_quantize.restype  = None
+LIB.kmeans_quantize.argtypes = [
+    ctypes.POINTER(ctypes.c_uint8),   
+    ctypes.c_int,                      
+    ctypes.c_int,                      
+    ctypes.c_int,                      
+    ctypes.c_int,                      
+    ctypes.c_uint32,                  
+]
+def kmeans(original_image: Image.Image, target_colors: int,
+           max_iter: int = 20, seed: int = 42) -> Image.Image:
+    pixels = np.ascontiguousarray(np.array(original_image, dtype=np.uint8))
+    h, w = pixels.shape[:2]
+    ptr = pixels.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+    LIB.kmeans_quantize(ptr, w, h, target_colors, max_iter, seed)
     return Image.fromarray(pixels, 'RGB')

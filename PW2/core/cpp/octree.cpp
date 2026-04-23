@@ -3,6 +3,8 @@
 #include <cstring>
 #include <unordered_map>
 #include <cassert>
+#include <algorithm> 
+#include <cmath>     
 
 template<typename T, size_t BlockSize = 4096>
 class PoolAllocator {
@@ -187,47 +189,87 @@ private:
 
 extern "C" {
 
-// Algorithm 1: Baseline — reduce inline during insertion.
-void octree_quantize_baseline(uint8_t* pixels, int num_pixels, int target_colors) {
-    Octree tree;
+    // Algorithm 1: Baseline — reduce inline during insertion.
+    void octree_quantize_baseline(uint8_t* pixels, int num_pixels, int target_colors) {
+        Octree tree;
 
-    for (int i = 0; i < num_pixels; ++i) {
-        tree.insert(pixels[i*3], pixels[i*3+1], pixels[i*3+2]);
+        for (int i = 0; i < num_pixels; ++i) {
+            tree.insert(pixels[i*3], pixels[i*3+1], pixels[i*3+2]);
+            while (tree.leaf_count > target_colors)
+                if (!tree.reduce()) break;
+        }
+
         while (tree.leaf_count > target_colors)
             if (!tree.reduce()) break;
+
+        for (int i = 0; i < num_pixels; ++i) {
+            uint8_t r_out, g_out, b_out;
+            tree.map_color(pixels[i*3], pixels[i*3+1], pixels[i*3+2], r_out, g_out, b_out);
+            
+            pixels[i*3]   = r_out;
+            pixels[i*3+1] = g_out;
+            pixels[i*3+2] = b_out;
+        }
     }
 
-    while (tree.leaf_count > target_colors)
-        if (!tree.reduce()) break;
+    // Algorithm 2: Two-pass — build the full tree first, then reduce to target, then remap.
+    void octree_quantize_two_pass(uint8_t* pixels, int num_pixels, int target_colors) {
+        Octree tree;
 
-    for (int i = 0; i < num_pixels; ++i) {
-        uint8_t r_out, g_out, b_out;
-        tree.map_color(pixels[i*3], pixels[i*3+1], pixels[i*3+2], r_out, g_out, b_out);
+        for (int i = 0; i < num_pixels; ++i)
+            tree.insert(pixels[i*3], pixels[i*3+1], pixels[i*3+2]);
+
+        while (tree.leaf_count > target_colors)
+            if (!tree.reduce()) break;
         
-        pixels[i*3]   = r_out;
-        pixels[i*3+1] = g_out;
-        pixels[i*3+2] = b_out;
+        for (int i = 0; i < num_pixels; ++i) {
+            uint8_t r_out, g_out, b_out;
+            tree.map_color(pixels[i*3], pixels[i*3+1], pixels[i*3+2], r_out, g_out, b_out);
+            
+            pixels[i*3]   = r_out;
+            pixels[i*3+1] = g_out;
+            pixels[i*3+2] = b_out;
+        }
     }
-}
-
-// Algorithm 2: Two-pass — build the full tree first, then reduce to target, then remap.
-void octree_quantize_two_pass(uint8_t* pixels, int num_pixels, int target_colors) {
-    Octree tree;
-
-    for (int i = 0; i < num_pixels; ++i)
-        tree.insert(pixels[i*3], pixels[i*3+1], pixels[i*3+2]);
-
-    while (tree.leaf_count > target_colors)
-        if (!tree.reduce()) break;
-    
+    // Image info for CSV logging
+    double calculate_exact_color_difference(const uint8_t* pixels, int num_pixels) {
+    std::vector<uint32_t> colors;
+    colors.reserve(num_pixels);
     for (int i = 0; i < num_pixels; ++i) {
-        uint8_t r_out, g_out, b_out;
-        tree.map_color(pixels[i*3], pixels[i*3+1], pixels[i*3+2], r_out, g_out, b_out);
-        
-        pixels[i*3]   = r_out;
-        pixels[i*3+1] = g_out;
-        pixels[i*3+2] = b_out;
+        uint32_t r = pixels[i * 3];
+        uint32_t g = pixels[i * 3 + 1];
+        uint32_t b = pixels[i * 3 + 2];
+        colors.push_back((r << 16) | (g << 8) | b);
     }
-}
 
+    std::sort(colors.begin(), colors.end());
+    auto last = std::unique(colors.begin(), colors.end());
+    colors.erase(last, colors.end());
+
+    long long N = colors.size();
+    if (N < 2) return 0.0;
+
+    double total_distance = 0.0;
+
+    #pragma omp parallel for reduction(+:total_distance) schedule(dynamic)
+    for (long long i = 0; i < N; ++i) {
+        double local_sum = 0.0;
+        uint32_t c1 = colors[i];
+        int r1 = (c1 >> 16) & 0xFF;
+        int g1 = (c1 >> 8) & 0xFF;
+        int b1 = c1 & 0xFF;
+
+        for (long long j = 0; j < N; ++j) {
+            uint32_t c2 = colors[j];
+            int dr = r1 - ((c2 >> 16) & 0xFF);
+            int dg = g1 - ((c2 >> 8) & 0xFF);
+            int db = b1 - (c2 & 0xFF);
+
+            local_sum += std::sqrt(dr * dr + dg * dg + db * db);
+        }
+        total_distance += local_sum;
+    }
+
+    return total_distance / ((double)(N - 1) * (double)(N - 1));
+}
 } 

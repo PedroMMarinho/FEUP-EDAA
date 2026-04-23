@@ -8,7 +8,7 @@ def main():
                         help="Which phase of the project to run")
     parser.add_argument('--input', type=str, required=True, 
                         help="Path to file OR directory")
-    parser.add_argument('--colors', type=int, default=16, 
+    parser.add_argument('--colors', type=int, default=8, 
                         help="Target number of colors")
     
     args = parser.parse_args()

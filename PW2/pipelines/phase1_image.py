@@ -2,7 +2,7 @@ import time
 from pathlib import Path
 import pandas as pd
 from core.algorithm import run_algorithm
-from utils.utils import get_color_difference, get_image_color_count, get_image_resolution, load_image_data, save_image_output
+from utils.utils import calculate_error_metrics, get_color_difference, get_image_color_count, get_image_resolution, load_image_data, save_image_output
 from utils.macros import ALGORITHMS, OUTPUT_CSV_DIR, OUTPUT_IMAGE_DIR
 
 def get_next_csv_path(output_dir: Path, base_name="benchmark_stats") -> Path:
@@ -79,33 +79,45 @@ def run(input_path: Path, output_base: Path, target_colors: int, output_csv_path
     original_image = load_image_data(input_path)
 
     rows = []
-    final_colors = None
+    least_colors = 8
 
     for algo in ALGORITHMS:
-        for i in range(n_run_times):
-            start_time = time.perf_counter()
-            processed_image = run_algorithm(algo, original_image, target_colors)
-            end_time = time.perf_counter()
+       
+        current_colors = least_colors
+        while current_colors <= target_colors:
+            final_colors = None
+            for i in range(n_run_times):
+                start_time = time.perf_counter()
+                processed_image = run_algorithm(algo, original_image, current_colors)
+                end_time = time.perf_counter()
 
-            if processed_image is None:
-                break
+                if processed_image is None:
+                    break 
+                
+                mae, mse = calculate_error_metrics(original_image, processed_image)
+                
+                
+                if i == 0:  
+                    final_output_path = output_base / algo / f"color_{current_colors}" / f"{clean_name}.png"
+                                        
+                    save_image_output(processed_image, final_output_path)
+                    final_colors = get_image_color_count(final_output_path)
 
-            if i == 0:  
-                final_output_path = output_base / algo / f"color_{target_colors}" / f"{clean_name}.png"
-                save_image_output(processed_image, final_output_path)
-                final_colors = get_image_color_count(final_output_path)
+                time_taken = end_time - start_time
 
-            time_taken = end_time - start_time
-
-            rows.append({
-                'Image Name': clean_name,
-                'Resolution': resolution,
-                'Algorithm': algo,
-                'Target Colors': target_colors,
-                'Original Colors': original_colors,
-                'Final Colors': final_colors,
-                'Time Taken (ms)': time_taken * 1000
-            })
+                rows.append({
+                    'Image Name': clean_name,
+                    'Resolution': resolution,
+                    'Algorithm': algo,
+                    'Target Colors': current_colors, 
+                    'Original Colors': original_colors,
+                    'Final Colors': final_colors,
+                    'Time Taken (ms)': time_taken * 1000,
+                    'MAE': mae,
+                    'MSE': mse
+                })
+            
+            current_colors *= 2
 
     results = pd.DataFrame(rows)
     

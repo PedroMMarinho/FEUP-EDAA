@@ -2,7 +2,7 @@ import ctypes
 
 from PIL import Image
 import csv
-from utils.macros import CSV_FILE, LIB_PATH
+from utils.macros import CSV_FILE, LIB, LIB_PATH
 import numpy as np
 
 def load_image_data(filepath):
@@ -23,9 +23,8 @@ def get_image_color_count(image_path):
     colors = img.getcolors(maxcolors=10000000) 
     return len(colors) 
 
-lib = ctypes.CDLL(str(LIB_PATH))
-lib.calculate_exact_color_difference.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_int]
-lib.calculate_exact_color_difference.restype = ctypes.c_double
+LIB.calculate_exact_color_difference.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_int]
+LIB.calculate_exact_color_difference.restype = ctypes.c_double
 
 def get_color_difference(image_path):
     img = Image.open(image_path).convert('RGB')
@@ -36,5 +35,20 @@ def get_color_difference(image_path):
     pixel_ptr = pixels.ctypes.data_as(c_uint8_p)
     num_pixels = len(pixels) // 3
     
-    result = lib.calculate_exact_color_difference(pixel_ptr, num_pixels)
+    result = LIB.calculate_exact_color_difference(pixel_ptr, num_pixels)
     return result
+
+def calculate_error_metrics(original_img, processed_img):
+    X = np.array(original_img).astype(np.float64)
+    X_hat = np.array(processed_img).astype(np.float64)
+    
+    H, W = X.shape[0], X.shape[1]
+    HW = H * W
+    
+    diff = X - X_hat
+    
+    mae = np.sum(np.abs(diff)) / HW
+    
+    mse = np.sum(diff ** 2) / HW
+    
+    return mae, mse

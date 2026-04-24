@@ -20,6 +20,8 @@ def run_algorithm(algo: str, original_image: Image.Image, target_colors: int) ->
             return som(original_image, target_colors)
         case "Octree-SOM":
             return som_octree(original_image, target_colors)
+        case "Octree-K-Means":
+            return None  # Placeholder for future implementation
         case _:
             raise ValueError(f"Unknown algorithm: {algo}")
 

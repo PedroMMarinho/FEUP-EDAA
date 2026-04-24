@@ -13,5 +13,6 @@ ALGORITHMS = [
     "Median-Cut",
     "K-Means",
     "SOM",
-    "Octree-SOM"
+    "Octree-SOM",
+    "Octree-K-Means",
 ]

@@ -23,6 +23,10 @@ phase1-all:
 	@echo "Running Phase 1 (Batch Directory)..."
 	python main.py --phase 1 --input $(DIR) --colors $(COLORS)
 
+phase1-stats:
+	@echo "Generating statistical plots..."
+	python main.py --phase 1 --stats
+
 clean:
 	@echo "Cleaning output directory..."
 	rm -f assets/output/*.png

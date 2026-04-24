@@ -2,7 +2,7 @@ import ctypes
 
 from PIL import Image
 import csv
-from utils.macros import CSV_FILE, LIB, LIB_PATH
+from utils.macros import LIB, LIB_PATH
 import numpy as np
 
 def load_image_data(filepath):

@@ -290,4 +290,103 @@ extern "C" {
             pixels[i*3+2] = (uint8_t)(centroids[j*3+2] + 0.5f);
         }
     }
+
+    void som_quantize(uint8_t* pixels, int width, int height,
+                  int K, int max_iter,
+                  float lr0, float sigma0, float tol,
+                  uint32_t seed)
+{
+    int n = width * height;
+ 
+    std::vector<float> data(n * 3);
+    for (int i = 0; i < n * 3; ++i)
+        data[i] = (float)pixels[i];
+ 
+    std::mt19937 rng(seed);
+    std::vector<int> perm(n);
+    std::iota(perm.begin(), perm.end(), 0);
+    std::shuffle(perm.begin(), perm.end(), rng);
+ 
+    std::vector<float> weights(K * 3);
+    for (int i = 0; i < K; ++i) {
+        weights[i*3+0] = data[perm[i]*3+0];
+        weights[i*3+1] = data[perm[i]*3+1];
+        weights[i*3+2] = data[perm[i]*3+2];
+    }
+ 
+    std::vector<float> pos(K);
+    for (int i = 0; i < K; ++i) pos[i] = (float)i;
+ 
+    std::uniform_int_distribution<int> rand_pixel(0, n - 1);
+ 
+    for (int t = 0; t < max_iter; ++t) {
+        float progress = (float)t / (float)max_iter;
+        float lr    = lr0    * std::exp(-progress * 9.0f);  
+        float sigma = sigma0 * std::exp(-progress * 9.0f);
+        float sigma2 = 2.0f * sigma * sigma;
+ 
+        int pi = rand_pixel(rng);
+        const float sr = data[pi*3+0];
+        const float sg = data[pi*3+1];
+        const float sb = data[pi*3+2];
+ 
+        int winner = 0;
+        float best = std::numeric_limits<float>::max();
+        for (int j = 0; j < K; ++j) {
+            float dr = sr - weights[j*3+0];
+            float dg = sg - weights[j*3+1];
+            float db = sb - weights[j*3+2];
+            float d  = dr*dr + dg*dg + db*db;
+            if (d < best) { best = d; winner = j; }
+        }
+ 
+        float total_delta = 0.0f;
+        for (int j = 0; j < K; ++j) {
+            float diff = pos[j] - (float)winner;
+            float h    = std::exp(-(diff * diff) / sigma2);
+            float scale = lr * h;
+ 
+            float dr = scale * (sr - weights[j*3+0]);
+            float dg = scale * (sg - weights[j*3+1]);
+            float db = scale * (sb - weights[j*3+2]);
+ 
+            weights[j*3+0] += dr;
+            weights[j*3+1] += dg;
+            weights[j*3+2] += db;
+ 
+            total_delta += std::fabs(dr) + std::fabs(dg) + std::fabs(db);
+        }
+ 
+        if (total_delta < tol)
+            break;
+    }
+ 
+    std::vector<uint8_t> palette(K * 3);
+    for (int j = 0; j < K; ++j) {
+        palette[j*3+0] = (uint8_t)std::fmin(255.0f, std::fmax(0.0f, weights[j*3+0] + 0.5f));
+        palette[j*3+1] = (uint8_t)std::fmin(255.0f, std::fmax(0.0f, weights[j*3+1] + 0.5f));
+        palette[j*3+2] = (uint8_t)std::fmin(255.0f, std::fmax(0.0f, weights[j*3+2] + 0.5f));
+    }
+ 
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < n; ++i) {
+        float r = data[i*3+0];
+        float g = data[i*3+1];
+        float b = data[i*3+2];
+ 
+        int best_j = 0;
+        float best_d = std::numeric_limits<float>::max();
+        for (int j = 0; j < K; ++j) {
+            float dr = r - weights[j*3+0];
+            float dg = g - weights[j*3+1];
+            float db = b - weights[j*3+2];
+            float d  = dr*dr + dg*dg + db*db;
+            if (d < best_d) { best_d = d; best_j = j; }
+        }
+ 
+        pixels[i*3+0] = palette[best_j*3+0];
+        pixels[i*3+1] = palette[best_j*3+1];
+        pixels[i*3+2] = palette[best_j*3+2];
+    }
+}
 }

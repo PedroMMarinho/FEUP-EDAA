@@ -1,6 +1,6 @@
 import argparse
 import time
-from pipelines import phase1_image
+from pipelines import phase1_image, phase2_video
 
 def main():
     parser = argparse.ArgumentParser(description="Octree Color Quantizer")
@@ -27,7 +27,12 @@ def main():
                 phase1_image.generate_statistics_charts()
                 
         case 2:
-            print("Phase 2 is not implemented yet.")
+            print(f"--- Starting Phase 2 (Video Processing) ---")
+            if not args.input:
+                parser.error("--input is required for Phase 2 (Path to video file)")
+            
+            print(f"Input Video: {args.input} | Target Colors: {args.colors}")
+            phase2_video.process_video(args.input, args.colors)
         case 3:
             print("Phase 3 is not implemented yet.")
         case 4:

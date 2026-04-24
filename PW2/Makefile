@@ -1,5 +1,6 @@
 # Default variables 
 IMG ?= assets/input/raw_images/sipi/4.2.03.tiff
+VID ?= assets/input/raw_videos/test_set/foreman_cif.y4m
 DIR ?= assets/input/raw_images/test_set/
 COLORS ?= 256
 
@@ -22,6 +23,10 @@ phase1:
 phase1-all:
 	@echo "Running Phase 1 (Batch Directory)..."
 	python main.py --phase 1 --input $(DIR) --colors $(COLORS)
+
+phase2:
+	@echo "Running Phase 2 (Video Quantization)..."
+	python main.py --phase 2 --input $(VID) --colors $(COLORS)
 
 phase1-stats:
 	@echo "Generating statistical plots..."

@@ -5,6 +5,7 @@ from pathlib import Path
 OUTPUT_STATS_DIR = Path("assets/output/statistics")
 OUTPUT_CSV_DIR = Path("assets/output/csv")
 OUTPUT_IMAGE_DIR = Path("assets/output/modified_images")
+OUTPUT_VIDEO_DIR = Path("assets/output/videos")
 LIB_PATH = Path("core/cpp/octree_lib.so").resolve()
 LIB = ctypes.CDLL(str(LIB_PATH))
 ALGORITHMS = [

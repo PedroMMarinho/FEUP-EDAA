@@ -19,7 +19,7 @@ def run_algorithm(algo: str, original_image: Image.Image, target_colors: int) ->
         case "SOM":
             return som(original_image, target_colors)
         case "Octree-SOM":
-            return None
+            return som_octree(original_image, target_colors)
         case _:
             raise ValueError(f"Unknown algorithm: {algo}")
 
@@ -91,4 +91,35 @@ def som(original_image: Image.Image, target_colors: int) -> Image.Image:
                      float(target_colors) / 2.0, 
                      1e-4,               
                      42)                 
+    return Image.fromarray(pixels, 'RGB')
+
+
+LIB.som_octree_quantize.restype  = None
+LIB.som_octree_quantize.argtypes = [
+    ctypes.POINTER(ctypes.c_uint8),  
+    ctypes.c_int,                     
+    ctypes.c_int,                     
+    ctypes.c_int,                     
+    ctypes.c_int,                    
+    ctypes.c_int,                     
+    ctypes.c_float,                   
+    ctypes.c_float,                   
+    ctypes.c_float,                  
+    ctypes.c_uint32,                 
+]
+
+def som_octree(original_image: Image.Image, target_colors: int) -> Image.Image:
+    pixels = np.ascontiguousarray(np.array(original_image, dtype=np.uint8))
+    h, w = pixels.shape[:2]
+    n = h * w
+    ptr = pixels.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+    intermediate = min(n, 4096)
+    LIB.som_octree_quantize(ptr, w, h,
+                            target_colors,
+                            intermediate,
+                            intermediate * 2,    
+                            0.62,
+                            float(target_colors) / 2.0,
+                            1e-4,
+                            42)
     return Image.fromarray(pixels, 'RGB')

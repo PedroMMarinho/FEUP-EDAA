@@ -96,32 +96,27 @@ def som(original_image: Image.Image, target_colors: int) -> Image.Image:
     return Image.fromarray(pixels, 'RGB')
 
 
+
 LIB.som_octree_quantize.restype  = None
 LIB.som_octree_quantize.argtypes = [
-    ctypes.POINTER(ctypes.c_uint8),  
-    ctypes.c_int,                     
-    ctypes.c_int,                     
-    ctypes.c_int,                     
-    ctypes.c_int,                    
-    ctypes.c_int,                     
-    ctypes.c_float,                   
-    ctypes.c_float,                   
-    ctypes.c_float,                  
-    ctypes.c_uint32,                 
+    ctypes.POINTER(ctypes.c_uint8),  # pixels
+    ctypes.c_int,                     # width
+    ctypes.c_int,                     # height
+    ctypes.c_int,                     # K
+    ctypes.c_float,                   # alpha_winner
+    ctypes.c_float,                   # threshold
+    ctypes.c_int,                     # subset_size (0 = all pixels)
+    ctypes.c_uint32,                  # seed
 ]
 
 def som_octree(original_image: Image.Image, target_colors: int) -> Image.Image:
     pixels = np.ascontiguousarray(np.array(original_image, dtype=np.uint8))
     h, w = pixels.shape[:2]
-    n = h * w
     ptr = pixels.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
-    intermediate = min(n, 4096)
     LIB.som_octree_quantize(ptr, w, h,
                             target_colors,
-                            intermediate,
-                            intermediate * 2,    
-                            0.62,
-                            float(target_colors) / 2.0,
-                            1e-4,
+                            0.5,      # alpha_winner
+                            0.025,    # threshold — paper's recommended value
+                            5000,     # subset_size per iteration
                             42)
     return Image.fromarray(pixels, 'RGB')

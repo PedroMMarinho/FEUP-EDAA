@@ -133,18 +133,16 @@ private:
         
         return 0; 
     }
-    void collectLeaves(OctreeNode* node, std::vector<std::pair<Color,int>>& leaves) {
+    void collectLeaves(OctreeNode* node, std::vector<Color>& out) {
         if (!node) return;
         if (node->isLeaf) {
-            Color c = {
+            out.push_back({
                 (int)(node->sumR / node->colorCount),
                 (int)(node->sumG / node->colorCount),
                 (int)(node->sumB / node->colorCount)
-            };
-            leaves.push_back({c, node->colorCount});
+            });
         } else {
-            for (int i = 0; i < 8; ++i)
-                collectLeaves(node->children[i], leaves);
+            for (int i = 0; i < 8; ++i) collectLeaves(node->children[i], out);
         }
     }
 
@@ -163,10 +161,10 @@ public:
         }
     }
 
-    std::vector<std::pair<Color,int>> getWeightedPalette() {
-        std::vector<std::pair<Color,int>> leaves;
-        collectLeaves(root, leaves);
-        return leaves;
+    std::vector<Color> getKColors() {
+        std::vector<Color> out;
+        collectLeaves(root, out);
+        return out;
     }
 
     std::vector<Color> getPalette() {
@@ -193,7 +191,6 @@ extern "C" {
     std::vector<Color> palette = quantizer.getPalette();
     int P = (int)palette.size();
 
-    // Flat array for better cache locality
     std::vector<int> pal_flat(P * 3);
     for (int j = 0; j < P; ++j) {
         pal_flat[j*3]   = palette[j].r;
@@ -211,7 +208,7 @@ extern "C" {
             int db = pb - pal_flat[j*3+2];
             int d  = dr*dr + dg*dg + db*db;
             if (d < bestD) { bestD = d; best = j; }
-            if (bestD == 0) break;  // early exit on perfect match
+            if (bestD == 0) break; 
         }
         pixels[i*3]   = pal_flat[best*3];
         pixels[i*3+1] = pal_flat[best*3+1];
@@ -425,116 +422,127 @@ extern "C" {
         pixels[i*3+1] = palette[best_j*3+1];
         pixels[i*3+2] = palette[best_j*3+2];
     }
-    }
+}
 
     void som_octree_quantize(uint8_t* pixels, int width, int height,
-                         int K, int intermediate,
-                         int max_iter, float lr0, float sigma0,
-                         float tol, uint32_t seed)
-{
-    int n = width * height;
- 
-    OctreeQuantizer quantizer(intermediate);
-    for (int i = 0; i < n; ++i)
-        quantizer.addColor({pixels[i*3], pixels[i*3+1], pixels[i*3+2]});
- 
-    std::vector<std::pair<Color,int>> weighted = quantizer.getWeightedPalette();
-    int M = (int)weighted.size(); 
- 
-    std::mt19937 rng(seed);
- 
-    std::vector<int> sample_pool;
-    sample_pool.reserve(M * 10); 
-    int total_weight = 0;
-    for (auto& [c, cnt] : weighted) total_weight += cnt;
-    for (int i = 0; i < M; ++i) {
-        int repeats = std::max(1, (int)std::round(10000.0 * weighted[i].second / total_weight));
-        for (int r = 0; r < repeats; ++r)
-            sample_pool.push_back(i);
-    }
-    std::shuffle(sample_pool.begin(), sample_pool.end(), rng);
- 
-    std::vector<int> perm(M);
-    std::iota(perm.begin(), perm.end(), 0);
-    std::shuffle(perm.begin(), perm.end(), rng);
- 
-    std::vector<float> weights(K * 3);
-    for (int i = 0; i < K; ++i) {
-        int idx = perm[i % M];
-        weights[i*3+0] = (float)weighted[idx].first.r;
-        weights[i*3+1] = (float)weighted[idx].first.g;
-        weights[i*3+2] = (float)weighted[idx].first.b;
-    }
- 
-    std::uniform_int_distribution<int> rand_pool(0, (int)sample_pool.size() - 1);
- 
-    for (int t = 0; t < max_iter; ++t) {
-        float progress = (float)t / (float)max_iter;
-        float lr    = lr0    * std::exp(-progress * 9.0f);  
-        float sigma = sigma0 * std::exp(-progress * 9.0f);
-        float sigma2 = 2.0f * sigma * sigma;
- 
-        int ci = sample_pool[rand_pool(rng)];
-        float sr = (float)weighted[ci].first.r;
-        float sg = (float)weighted[ci].first.g;
-        float sb = (float)weighted[ci].first.b;
- 
-        int winner = 0;
-        float best = std::numeric_limits<float>::max();
-        for (int j = 0; j < K; ++j) {
-            float dr = sr - weights[j*3+0];
-            float dg = sg - weights[j*3+1];
-            float db = sb - weights[j*3+2];
-            float d  = dr*dr + dg*dg + db*db;
-            if (d < best) { best = d; winner = j; }
+                            int K, float alpha_winner,
+                            float threshold, int subset_size,
+                            uint32_t seed)
+    {
+        int n = width * height;
+    
+        OctreeQuantizer quantizer(K);
+        for (int i = 0; i < n; ++i)
+            quantizer.addColor({pixels[i*3], pixels[i*3+1], pixels[i*3+2]});
+    
+        std::vector<Color> k_colors = quantizer.getKColors();
+        int actual_K = (int)k_colors.size();
+    
+        // ── Step 2: 2D map layout ─────────────────────────────────────────────────
+        int map_cols = (int)std::ceil(std::sqrt((double)actual_K));
+        int map_rows = (int)std::ceil((double)actual_K / map_cols);
+        int map_size = map_rows * map_cols;
+    
+        std::vector<float> weights(map_size * 3, 128.0f);  
+        for (int i = 0; i < actual_K; ++i) {
+            weights[i*3+0] = (float)k_colors[i].r;
+            weights[i*3+1] = (float)k_colors[i].g;
+            weights[i*3+2] = (float)k_colors[i].b;
         }
- 
-        float total_delta = 0.0f;
-        for (int j = 0; j < K; ++j) {
-            float diff = (float)(j - winner);
-            float h    = std::exp(-(diff * diff) / sigma2);
-            float scale = lr * h;
- 
-            float dr = scale * (sr - weights[j*3+0]);
-            float dg = scale * (sg - weights[j*3+1]);
-            float db = scale * (sb - weights[j*3+2]);
- 
-            weights[j*3+0] += dr;
-            weights[j*3+1] += dg;
-            weights[j*3+2] += db;
- 
-            total_delta += std::fabs(dr) + std::fabs(dg) + std::fabs(db);
+    
+        std::vector<float> data(n * 3);
+        for (int i = 0; i < n * 3; ++i) data[i] = (float)pixels[i];
+    
+        std::mt19937 rng(seed);
+        int N_prime = (subset_size > 0) ? std::min(subset_size, n) : n;
+    
+        std::vector<int> indices(n);
+        std::iota(indices.begin(), indices.end(), 0);
+    
+        int t = 1;
+        while (true) {
+            float alpha_w = alpha_winner / (float)t;
+            float alpha_n = alpha_w / 100.0f;
+    
+            std::shuffle(indices.begin(), indices.end(), rng);
+    
+            float total_delta = 0.0f;
+    
+            for (int s = 0; s < N_prime; ++s) {
+                int pi = indices[s];
+                float px_r = data[pi*3+0];
+                float px_g = data[pi*3+1];
+                float px_b = data[pi*3+2];
+    
+                int winner = 0;
+                float best = std::numeric_limits<float>::max();
+                for (int j = 0; j < map_size; ++j) {
+                    float dr = px_r - weights[j*3+0];
+                    float dg = px_g - weights[j*3+1];
+                    float db = px_b - weights[j*3+2];
+                    float d  = dr*dr + dg*dg + db*db;
+                    if (d < best) { best = d; winner = j; }
+                }
+    
+                int wr = winner / map_cols;
+                int wc = winner % map_cols;
+    
+                for (int j = 0; j < map_size; ++j) {
+                    int jr = j / map_cols;
+                    int jc = j % map_cols;
+                    int dr = jr - wr;
+                    int dc = jc - wc;
+                    int dist2 = dr*dr + dc*dc;
+    
+                    float alpha = (dist2 == 0) ? alpha_w :
+                                (dist2 <= 2) ? alpha_n : 0.0f;
+                    if (alpha == 0.0f) continue;
+    
+                    float dw0 = alpha * (px_r - weights[j*3+0]);
+                    float dw1 = alpha * (px_g - weights[j*3+1]);
+                    float dw2 = alpha * (px_b - weights[j*3+2]);
+    
+                    weights[j*3+0] += dw0;
+                    weights[j*3+1] += dw1;
+                    weights[j*3+2] += dw2;
+    
+                    total_delta += std::fabs(dw0) + std::fabs(dw1) + std::fabs(dw2);
+                }
+            }
+    
+            float avg_delta = total_delta / (float)(N_prime * map_size * 3);
+            if (avg_delta < threshold) break;
+    
+            t++;
         }
- 
-        if (total_delta < tol) break;
-    }
- 
-    std::vector<uint8_t> palette(K * 3);
-    for (int j = 0; j < K; ++j) {
-        palette[j*3+0] = (uint8_t)std::fmin(255.f, std::fmax(0.f, weights[j*3+0] + 0.5f));
-        palette[j*3+1] = (uint8_t)std::fmin(255.f, std::fmax(0.f, weights[j*3+1] + 0.5f));
-        palette[j*3+2] = (uint8_t)std::fmin(255.f, std::fmax(0.f, weights[j*3+2] + 0.5f));
-    }
- 
-    #pragma omp parallel for schedule(static)
-    for (int i = 0; i < n; ++i) {
-        float r = (float)pixels[i*3+0];
-        float g = (float)pixels[i*3+1];
-        float b = (float)pixels[i*3+2];
- 
-        int best_j = 0;
-        float best_d = std::numeric_limits<float>::max();
-        for (int j = 0; j < K; ++j) {
-            float dr = r - weights[j*3+0];
-            float dg = g - weights[j*3+1];
-            float db = b - weights[j*3+2];
-            float d  = dr*dr + dg*dg + db*db;
-            if (d < best_d) { best_d = d; best_j = j; }
+    
+        std::vector<uint8_t> palette(map_size * 3);
+        for (int j = 0; j < map_size; ++j) {
+            palette[j*3+0] = (uint8_t)std::fmin(255.f, std::fmax(0.f, weights[j*3+0] + 0.5f));
+            palette[j*3+1] = (uint8_t)std::fmin(255.f, std::fmax(0.f, weights[j*3+1] + 0.5f));
+            palette[j*3+2] = (uint8_t)std::fmin(255.f, std::fmax(0.f, weights[j*3+2] + 0.5f));
         }
- 
-        pixels[i*3+0] = palette[best_j*3+0];
-        pixels[i*3+1] = palette[best_j*3+1];
-        pixels[i*3+2] = palette[best_j*3+2];
+    
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < n; ++i) {
+            float r = data[i*3+0];
+            float g = data[i*3+1];
+            float b = data[i*3+2];
+    
+            int best_j = 0;
+            float best_d = std::numeric_limits<float>::max();
+            for (int j = 0; j < map_size; ++j) {
+                float dr = r - weights[j*3+0];
+                float dg = g - weights[j*3+1];
+                float db = b - weights[j*3+2];
+                float d  = dr*dr + dg*dg + db*db;
+                if (d < best_d) { best_d = d; best_j = j; }
+            }
+    
+            pixels[i*3+0] = palette[best_j*3+0];
+            pixels[i*3+1] = palette[best_j*3+1];
+            pixels[i*3+2] = palette[best_j*3+2];
+        }
     }
-}
+
 }

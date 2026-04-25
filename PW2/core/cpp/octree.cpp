@@ -12,6 +12,7 @@
 #include <numeric>
 #include <limits>
 #include <random>
+#include <chrono>
 
 struct Color {
     int r, g, b;
@@ -178,7 +179,64 @@ public:
     }
 };
 
+// Global palette and frame info for live quantization
+static std::vector<int> g_pal_flat;
+static int g_pal_size = 0;
+static int g_frame_count = 0;
+static int g_refresh_every = 30; 
+
 extern "C" {
+    // Live Quantization #
+    void build_octree_palette(unsigned char* pixels, int num_pixels, int max_colors) {
+        OctreeQuantizer quantizer(max_colors);
+        for (int i = 0; i < num_pixels; ++i)
+            quantizer.addColor({pixels[i*3], pixels[i*3+1], pixels[i*3+2]});
+
+        std::vector<Color> palette = quantizer.getPalette();
+        g_pal_size = (int)palette.size();
+        g_pal_flat.resize(g_pal_size * 3);
+        for (int j = 0; j < g_pal_size; ++j) {
+            g_pal_flat[j*3]   = palette[j].r;
+            g_pal_flat[j*3+1] = palette[j].g;
+            g_pal_flat[j*3+2] = palette[j].b;
+        }
+    }
+
+    void apply_palette(unsigned char* pixels, int num_pixels) {
+        int P = g_pal_size;
+        const int* pal = g_pal_flat.data();
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < num_pixels; ++i) {
+            int pr = pixels[i*3], pg = pixels[i*3+1], pb = pixels[i*3+2];
+            int best = 0, bestD = INT32_MAX;
+            for (int j = 0; j < P; ++j) {
+                int dr = pr - pal[j*3];
+                int dg = pg - pal[j*3+1];
+                int db = pb - pal[j*3+2];
+                int d  = dr*dr + dg*dg + db*db;
+                if (d < bestD) { bestD = d; best = j; }
+                if (bestD == 0) break;
+            }
+            pixels[i*3]   = pal[best*3];
+            pixels[i*3+1] = pal[best*3+1];
+            pixels[i*3+2] = pal[best*3+2];
+        }
+    }
+
+    void octree_quantize_live(unsigned char* pixels, int num_pixels, int max_colors) {
+        if (g_pal_size == 0 || g_frame_count % g_refresh_every == 0)
+            build_octree_palette(pixels, num_pixels, max_colors);
+        apply_palette(pixels, num_pixels);
+        g_frame_count++;
+    }
+
+    void reset_live_palette() {
+        g_pal_size = 0;
+        g_frame_count = 0;
+    }
+    // Live Quantization #
+
+
     // Baseline Algorithm
     void octree_quantize_baseline(unsigned char* pixels, int num_pixels, int max_colors) {
     OctreeQuantizer quantizer(max_colors);
@@ -545,4 +603,4 @@ extern "C" {
         }
     }
 
-}
+} // extern "C"

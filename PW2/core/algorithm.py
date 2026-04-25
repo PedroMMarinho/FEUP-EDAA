@@ -22,14 +22,25 @@ def run_algorithm(algo: str, original_image: Image.Image, target_colors: int) ->
             return som_octree(original_image, target_colors)
         case "Octree-K-Means":
             return None  # Placeholder for future implementation
-        case "Octree-Python":
-            return octree_quantize_python(original_image, target_colors)
+        case "Octree-Live":
+            return octree_quantize_live(original_image, target_colors)
         case _:
             raise ValueError(f"Unknown algorithm: {algo}")
 
+LIB.octree_quantize_live.restype  = None
+LIB.octree_quantize_live.argtypes = [
+    ctypes.POINTER(ctypes.c_uint8),
+    ctypes.c_int,  
+    ctypes.c_int, 
+]
 
-def octree_quantize_python(original_image: Image.Image, target_colors: int) -> Image.Image:
-    return original_image.quantize(colors=target_colors, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE).convert('RGB')
+# Not that much of a difference but will use it in game loop 
+def octree_quantize_live(original_image: Image.Image, target_colors: int) -> Image.Image:
+    pixels = np.ascontiguousarray(np.array(original_image, dtype=np.uint8))
+    n = pixels.shape[0] * pixels.shape[1]
+    ptr = pixels.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+    LIB.octree_quantize_live(ptr, n, target_colors)
+    return Image.fromarray(pixels, 'RGB')    
 
 def octree_baseline(original_image: Image.Image, target_colors: int) -> Image.Image:
     pixels = np.ascontiguousarray(np.array(original_image, dtype=np.uint8))

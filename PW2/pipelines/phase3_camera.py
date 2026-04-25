@@ -6,7 +6,7 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 
 from pipelines.phase1_image import run_algorithm
-from utils.macros import ALGORITHMS 
+from utils.macros import ALGORITHMS, LIB 
 
 class LiveQuantizationApp:
     def __init__(self, root):
@@ -64,6 +64,9 @@ class LiveQuantizationApp:
         self.current_algo = self.algo_cb.get()
         self.current_colors = int(self.color_cb.get())
         
+        if self.current_algo == "Octree-Live":
+            LIB.reset_live_palette()
+
         new_res = self.res_cb.get()
         if new_res != self.current_res:
             self.current_res = new_res
@@ -126,3 +129,4 @@ def process_live_camera():
     root.protocol("WM_DELETE_WINDOW", app.on_closing)
     root.mainloop()
     print("--- Live feed closed ---")
+

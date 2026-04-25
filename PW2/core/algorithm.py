@@ -8,7 +8,7 @@ from utils.macros import LIB
 LIB.octree_quantize_baseline.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_int, ctypes.c_int]
 
 def run_algorithm(algo: str, original_image: Image.Image, target_colors: int) -> Image.Image:
-    print(f"Running {algo} algorithm with target colors: {target_colors}")
+    #print(f"Running {algo} algorithm with target colors: {target_colors}")
     match algo:
         case "Octree-Baseline":
             return octree_baseline(original_image, target_colors)
@@ -22,9 +22,14 @@ def run_algorithm(algo: str, original_image: Image.Image, target_colors: int) ->
             return som_octree(original_image, target_colors)
         case "Octree-K-Means":
             return None  # Placeholder for future implementation
+        case "Octree-Python":
+            return octree_quantize_python(original_image, target_colors)
         case _:
             raise ValueError(f"Unknown algorithm: {algo}")
 
+
+def octree_quantize_python(original_image: Image.Image, target_colors: int) -> Image.Image:
+    return original_image.quantize(colors=target_colors, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE).convert('RGB')
 
 def octree_baseline(original_image: Image.Image, target_colors: int) -> Image.Image:
     pixels = np.ascontiguousarray(np.array(original_image, dtype=np.uint8))

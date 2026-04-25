@@ -15,4 +15,5 @@ ALGORITHMS = [
     "SOM",
     "Octree-SOM",
     "Octree-K-Means",
+    "Octree-Python"
 ]

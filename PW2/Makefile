@@ -24,13 +24,17 @@ phase1-all:
 	@echo "Running Phase 1 (Batch Directory)..."
 	python main.py --phase 1 --input $(DIR) --colors $(COLORS)
 
+phase1-stats:
+	@echo "Generating statistical plots..."
+	python main.py --phase 1 --stats
+
 phase2:
 	@echo "Running Phase 2 (Video Quantization)..."
 	python main.py --phase 2 --input $(VID) --colors $(COLORS)
 
-phase1-stats:
-	@echo "Generating statistical plots..."
-	python main.py --phase 1 --stats
+phase3:
+	@echo "Running Phase 3 (Live Camera Quantization)..."
+	python main.py --phase 3
 
 clean:
 	@echo "Cleaning output directory..."

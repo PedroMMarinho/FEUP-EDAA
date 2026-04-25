@@ -1,6 +1,6 @@
 import argparse
 import time
-from pipelines import phase1_image, phase2_video, phase3_camera
+from pipelines import phase1_image, phase2_video, phase3_camera, phase4_game
 
 def main():
     parser = argparse.ArgumentParser(description="Octree Color Quantizer")
@@ -37,7 +37,8 @@ def main():
             print(f"--- Starting Phase 3 (Live Camera) ---")
             phase3_camera.process_live_camera()        
         case 4:
-            print("Phase 4 is not implemented yet.")
+            print(f"--- Starting Phase 4 (Performance Analysis) ---")
+            phase4_game.process_game()
 
 if __name__ == "__main__":
     main()

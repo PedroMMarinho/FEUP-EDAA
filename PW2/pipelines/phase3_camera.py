@@ -38,7 +38,7 @@ class LiveQuantizationApp:
         self.color_cb.pack(side=tk.LEFT, padx=(0, 15))
         self.color_cb.bind("<<ComboboxSelected>>", self.on_change)
         
-        res_options = ["320x240", "640x480", "1280x720", "1920x1080"]
+        res_options = ["320x240", "640x480", "800x600", "1280x720", "1920x1080"]
         ttk.Label(self.control_frame, text="Resolution:").pack(side=tk.LEFT, padx=(0, 2))
         self.res_cb = ttk.Combobox(self.control_frame, values=res_options, state="readonly", width=10)
         self.res_cb.current(1)

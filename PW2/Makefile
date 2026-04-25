@@ -36,6 +36,10 @@ phase3:
 	@echo "Running Phase 3 (Live Camera Quantization)..."
 	python main.py --phase 3
 
+phase4:
+	@echo "Running Phase 4 (Performance Analysis)..."
+	python main.py --phase 4
+
 clean:
 	@echo "Cleaning output directory..."
 	rm -f assets/output/*.png

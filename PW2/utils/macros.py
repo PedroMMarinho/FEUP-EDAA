@@ -6,7 +6,7 @@ import platform
 OUTPUT_STATS_DIR = Path("assets/output/statistics")
 OUTPUT_CSV_DIR = Path("assets/output/csv")
 OUTPUT_IMAGE_DIR = Path("assets/output/modified_images")
-OUTPUT_VIDEO_DIR = Path("assets/output/videos")
+OUTPUT_VIDEO_DIR = Path("assets/output/modified_videos")
 if platform.system() == "Windows":
     LIB_PATH = Path("core/cpp/octree_lib.dll")
 else:

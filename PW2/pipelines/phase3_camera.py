@@ -91,18 +91,20 @@ class LiveQuantizationApp:
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             try:
-                processed_pil = run_algorithm(self.current_algo, frame_rgb, self.current_colors)
-                if processed_pil is None:
-                    processed_pil = frame_rgb
+                processed_array = run_algorithm(self.current_algo, frame_rgb, self.current_colors)
+                
+                if processed_array is None:
+                    processed_array = frame_rgb
             except Exception:
-                processed_pil = frame_rgb
+                processed_array = frame_rgb
 
             current_time = time.time()
             fps = 1.0 / (current_time - prev_time) if (current_time - prev_time) > 0 else 0
             prev_time = current_time
 
             self.latest_fps = fps
-            self.latest_pil_image = Image.fromarray(processed_pil)
+            
+            self.latest_pil_image = Image.fromarray(processed_array)
 
         cap.release()
 

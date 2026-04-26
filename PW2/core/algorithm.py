@@ -5,9 +5,10 @@ import numpy as np
 from PIL import Image
 from utils.macros import LIB
 
-
 def run_algorithm(algo: str, original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
-    #print(f"Running {algo} algorithm with target colors: {target_colors}")
+    if not original_image_frame.flags['C_CONTIGUOUS']:
+        original_image_frame = np.ascontiguousarray(original_image_frame)
+
     match algo:
         case "Octree-Baseline":
             return octree_baseline(original_image_frame, target_colors)
@@ -33,8 +34,7 @@ LIB.octree_quantize_live.argtypes = [
     ctypes.c_int, 
 ]
 
-# Not that much of a difference but will use it in game loop 
-def octree_quantize_live(original_image_frame: np.ndarray, target_colors: int) -> Image.Image:
+def octree_quantize_live(original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
     n = original_image_frame.shape[0] * original_image_frame.shape[1]
     ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
     LIB.octree_quantize_live(ptr, n, target_colors)
@@ -43,21 +43,16 @@ def octree_quantize_live(original_image_frame: np.ndarray, target_colors: int) -
 LIB.octree_quantize_baseline.restype  = None
 LIB.octree_quantize_baseline.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_int, ctypes.c_int]
 
-def octree_baseline(original_image_frame: np.ndarray, target_colors: int) -> Image.Image:
+def octree_baseline(original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
     total_original_image_frame = original_image_frame.shape[0] * original_image_frame.shape[1]
     pixel_ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
-    
     LIB.octree_quantize_baseline(pixel_ptr, total_original_image_frame, target_colors)
-    
     return original_image_frame
 
-def median_cut(original_image_frame: np.ndarray, target_colors: int) -> Image.Image:
-
+def median_cut(original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
     quantized_array = (original_image_frame >> 3) << 3
-    
     temp_image = Image.fromarray(quantized_array, 'RGB')
     
-
     res = temp_image.quantize(
         colors=target_colors, 
         method=Image.Quantize.MEDIANCUT, 
@@ -65,7 +60,6 @@ def median_cut(original_image_frame: np.ndarray, target_colors: int) -> Image.Im
     ).convert('RGB')
 
     return np.array(res, dtype=np.uint8)
-
 
 LIB.kmeans_quantize.restype  = None
 LIB.kmeans_quantize.argtypes = [
@@ -76,8 +70,9 @@ LIB.kmeans_quantize.argtypes = [
     ctypes.c_int,                      
     ctypes.c_uint32,                  
 ]
+
 def kmeans(original_image_frame: np.ndarray, target_colors: int,
-           max_iter: int = 20, seed: int = 42) -> Image.Image:
+           max_iter: int = 20, seed: int = 42) -> np.ndarray:
     h, w = original_image_frame.shape[:2]
     ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
     LIB.kmeans_quantize(ptr, w, h, target_colors, max_iter, seed)
@@ -96,7 +91,7 @@ LIB.som_quantize.argtypes = [
     ctypes.c_uint32,                  
 ]
 
-def som(original_image_frame: np.ndarray, target_colors: int) -> Image.Image:
+def som(original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
     h, w = original_image_frame.shape[:2]
     n = h * w
     ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
@@ -109,11 +104,9 @@ def som(original_image_frame: np.ndarray, target_colors: int) -> Image.Image:
                      42)                 
     return original_image_frame
 
-
-
 LIB.som_octree_quantize.restype  = None
 LIB.som_octree_quantize.argtypes = [
-    ctypes.POINTER(ctypes.c_uint8),  # original_image_frame
+    ctypes.POINTER(ctypes.c_uint8),   # original_image_frame
     ctypes.c_int,                     # width
     ctypes.c_int,                     # height
     ctypes.c_int,                     # K
@@ -123,7 +116,7 @@ LIB.som_octree_quantize.argtypes = [
     ctypes.c_uint32,                  # seed
 ]
 
-def som_octree(original_image_frame: np.ndarray, target_colors: int) -> Image.Image:
+def som_octree(original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
     h, w = original_image_frame.shape[:2]
     ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
     LIB.som_octree_quantize(ptr, w, h,

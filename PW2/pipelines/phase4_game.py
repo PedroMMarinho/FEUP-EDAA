@@ -1,16 +1,24 @@
-import cv2
+import sys
 import time
 import threading
 import numpy as np
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
-import pygetwindow as gw
-import dxcam
-import ctypes
-import pyvirtualcam
+
 from pipelines.phase1_image import run_algorithm
 from utils.macros import ALGORITHMS 
+
+if sys.platform == "win32":
+    import pygetwindow as gw
+    import dxcam
+    import ctypes
+    import pyvirtualcam
+    
+    GWL_EXSTYLE = -20
+    WS_EX_LAYERED = 0x00080000
+    WS_EX_TRANSPARENT = 0x00000020
+    WDA_EXCLUDEFROMCAPTURE = 0x00000011
 
 # --- Windows API Constants ---
 GWL_EXSTYLE = -20

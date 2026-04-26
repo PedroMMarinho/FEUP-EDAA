@@ -1,13 +1,11 @@
 import cv2
 import time
 from pathlib import Path
-import subprocess
-from PIL import Image
 import numpy as np
 from core.algorithm import run_algorithm
 from utils.macros import OUTPUT_VIDEO_DIR 
 
-def process_video(input_path, target_colors):
+def process_video(input_path: str | Path, target_colors: int) -> None:
     input_file = Path(input_path)
     if not input_file.exists():
         print(f"Error: Video {input_path} not found.")
@@ -35,6 +33,7 @@ def process_video(input_path, target_colors):
 
     print(f"Total Frames to process: {total_frames} @ {fps} FPS")
     algo = "Octree-SOM"  
+    
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
@@ -42,13 +41,13 @@ def process_video(input_path, target_colors):
         
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
-        processed_pil = run_algorithm(algo, frame_rgb, target_colors) 
+        processed_rgb = run_algorithm(algo, frame_rgb, target_colors) 
         
-        processed_rgb = np.array(processed_pil)
         processed_bgr = cv2.cvtColor(processed_rgb, cv2.COLOR_RGB2BGR)
         
         out.write(processed_bgr)    
         frame_count += 1
+        
         if frame_count % 30 == 0:
             print(f"Processed {frame_count}/{total_frames} frames...")
 

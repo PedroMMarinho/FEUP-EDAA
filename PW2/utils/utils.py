@@ -44,16 +44,15 @@ def get_color_difference(image_path):
     return result
 
 def calculate_error_metrics(original_img, processed_img):
-    X = np.array(original_img).astype(np.float64)
-    X_hat = np.array(processed_img).astype(np.float64)
+    X = original_img.astype(np.float64)
+    X_hat = processed_img.astype(np.float64)
     
-    H, W = X.shape[0], X.shape[1]
+    H, W = X.shape[:2]
     HW = H * W
     
     diff = X - X_hat
     
     mae = np.sum(np.abs(diff)) / HW
-    
     mse = np.sum(diff ** 2) / HW
     
     return mae, mse

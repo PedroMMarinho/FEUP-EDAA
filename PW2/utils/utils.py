@@ -1,16 +1,21 @@
 import ctypes
-
+import cv2
 from PIL import Image
 import csv
 from utils.macros import LIB, LIB_PATH
 import numpy as np
 
 def load_image_data(filepath):
-    return Image.open(filepath).convert('RGB')
+    img_bgr = cv2.imread(str(filepath))
+    
+    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    
+    return np.ascontiguousarray(img_rgb)
 
-def save_image_output(image, output_path):
+def save_image_output(image: np.ndarray, output_path):
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    image.save(output_path)
+    img_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    cv2.imwrite(str(output_path), img_bgr)
     print(f"Saved output to: {output_path}")
 
 

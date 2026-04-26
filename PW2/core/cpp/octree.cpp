@@ -13,6 +13,11 @@
 #include <limits>
 #include <random>
 #include <chrono>
+#if defined(_WIN32) || defined(_WIN64)
+    #define EXPORT __declspec(dllexport)
+#else
+    #define EXPORT __attribute__((visibility("default")))
+#endif
 
 struct Color {
     int r, g, b;
@@ -187,7 +192,7 @@ static int g_refresh_every = 30;
 
 extern "C" {
     // Live Quantization #
-    void build_octree_palette(unsigned char* pixels, int num_pixels, int max_colors) {
+    EXPORT void build_octree_palette(unsigned char* pixels, int num_pixels, int max_colors) {
         OctreeQuantizer quantizer(max_colors);
         for (int i = 0; i < num_pixels; ++i)
             quantizer.addColor({pixels[i*3], pixels[i*3+1], pixels[i*3+2]});
@@ -202,7 +207,7 @@ extern "C" {
         }
     }
 
-    void apply_palette(unsigned char* pixels, int num_pixels) {
+   EXPORT void apply_palette(unsigned char* pixels, int num_pixels) {
         int P = g_pal_size;
         const int* pal = g_pal_flat.data();
         #pragma omp parallel for schedule(static)
@@ -223,14 +228,14 @@ extern "C" {
         }
     }
 
-    void octree_quantize_live(unsigned char* pixels, int num_pixels, int max_colors) {
+    EXPORT void octree_quantize_live(unsigned char* pixels, int num_pixels, int max_colors) {
         if (g_pal_size == 0 || g_frame_count % g_refresh_every == 0)
             build_octree_palette(pixels, num_pixels, max_colors);
         apply_palette(pixels, num_pixels);
         g_frame_count++;
     }
 
-    void reset_live_palette() {
+    EXPORT void reset_live_palette() {
         g_pal_size = 0;
         g_frame_count = 0;
     }
@@ -238,7 +243,7 @@ extern "C" {
 
 
     // Baseline Algorithm
-    void octree_quantize_baseline(unsigned char* pixels, int num_pixels, int max_colors) {
+    EXPORT void octree_quantize_baseline(unsigned char* pixels, int num_pixels, int max_colors) {
     OctreeQuantizer quantizer(max_colors);
     
     for (int i = 0; i < num_pixels; ++i) {
@@ -275,7 +280,7 @@ extern "C" {
 }
 
     // Image info for CSV logging
-    double calculate_exact_color_difference(const uint8_t* pixels, int num_pixels) {
+   EXPORT double calculate_exact_color_difference(const uint8_t* pixels, int num_pixels) {
         std::vector<uint32_t> colors;
         colors.reserve(num_pixels);
         for (int i = 0; i < num_pixels; ++i) {
@@ -317,7 +322,7 @@ extern "C" {
     }
 
     // K-Means Algorithm
-    void kmeans_quantize(uint8_t* pixels, int width, int height,
+   EXPORT void kmeans_quantize(uint8_t* pixels, int width, int height,
                         int k, int max_iter, uint32_t seed)
     {
         int n = width * height;
@@ -383,7 +388,7 @@ extern "C" {
         }
     }
 
-    void som_quantize(uint8_t* pixels, int width, int height,
+   EXPORT void som_quantize(uint8_t* pixels, int width, int height,
                   int K, int max_iter,
                   float lr0, float sigma0, float tol,
                   uint32_t seed)
@@ -482,7 +487,7 @@ extern "C" {
     }
 }
 
-    void som_octree_quantize(uint8_t* pixels, int width, int height,
+   EXPORT void som_octree_quantize(uint8_t* pixels, int width, int height,
                             int K, float alpha_winner,
                             float threshold, int subset_size,
                             uint32_t seed)

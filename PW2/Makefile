@@ -7,7 +7,13 @@ COLORS ?= 256
 # Compiler settings
 CXX = g++
 CXXFLAGS = -O3 -march=native -funroll-loops -ffast-math -shared -fPIC -fopenmp
-LIB_OUT = core/cpp/octree_lib.so
+ifeq ($(OS),Windows_NT)
+    LIB_OUT = core/cpp/octree_lib.dll
+    RM = del /Q /F
+else
+    LIB_OUT = core/cpp/octree_lib.so
+    RM = rm -f
+endif
 SRC = core/cpp/octree.cpp
 
 all: build

@@ -41,9 +41,8 @@ def process_video(input_path, target_colors):
             break 
         
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        pil_img = Image.fromarray(frame_rgb)
         
-        processed_pil = run_algorithm(algo, pil_img, target_colors) 
+        processed_pil = run_algorithm(algo, frame_rgb, target_colors) 
         
         processed_rgb = np.array(processed_pil)
         processed_bgr = cv2.cvtColor(processed_rgb, cv2.COLOR_RGB2BGR)

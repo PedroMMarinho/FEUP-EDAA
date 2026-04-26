@@ -90,8 +90,10 @@ def run(input_path: Path, output_base: Path, target_colors: int, output_csv_path
         while current_colors <= target_colors:
             final_colors = None
             for i in range(n_run_times):
+                input_frame = original_image.copy()
+
                 start_time = time.perf_counter()
-                processed_image = run_algorithm(algo, original_image, current_colors)
+                processed_image = run_algorithm(algo, input_frame, current_colors)
                 end_time = time.perf_counter()
 
                 if processed_image is None:

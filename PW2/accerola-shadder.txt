@@ -1,0 +1,7 @@
+Pipeline:
+
+- Apply point filtering to the image.
+- When downscaling or upscaling the image use powers of 2 to not get mixels. (He uses mostly downscaling 2x)
+- Camera mode to Ortographic projection (no perspective). Does it apply to our case ?
+- Usage of ordered dithering (Bayer dithering). (Uses threshold maps to determine how to quantize the image) (Size of matrix used is 4x4, can try with different things)
+    - Precompute these values for faster processing and store them in a lookup table.

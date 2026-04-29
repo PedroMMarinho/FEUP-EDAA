@@ -1,28 +1,44 @@
 import argparse
 import time
-from pipelines import phase1_image
+from pipelines import phase1_image, phase2_video, phase3_camera, phase4_game
 
 def main():
     parser = argparse.ArgumentParser(description="Octree Color Quantizer")
     parser.add_argument('--phase', type=int, choices=[1, 2, 3, 4], required=True, 
                         help="Which phase of the project to run")
-    parser.add_argument('--input', type=str, required=True, 
+    parser.add_argument('--stats', action='store_true', 
+                        help="Generate statistics charts (only for phase 1)")
+    
+    parser.add_argument('--input', type=str, 
                         help="Path to file OR directory")
-    parser.add_argument('--colors', type=int, default=16, 
+    parser.add_argument('--colors', type=int, default=8, 
                         help="Target number of colors")
     
     args = parser.parse_args()
     match args.phase:
         case 1:
             print(f"--- Starting Phase 1 ---")
-            print(f"Input: {args.input} | Target Colors: {args.colors}")
-            phase1_image.process_target(args.input, args.colors)
+            if args.input:
+                print(f"Input: {args.input} | Target Colors: {args.colors}")
+                phase1_image.process_target(args.input, args.colors)
+
+            if args.stats:
+                print(f"--- Generating Statistics ---")
+                phase1_image.generate_statistics_charts()
+                
         case 2:
-            print("Phase 2 is not implemented yet.")
+            print(f"--- Starting Phase 2 (Video Processing) ---")
+            if not args.input:
+                parser.error("--input is required for Phase 2 (Path to video file)")
+            
+            print(f"Input Video: {args.input} | Target Colors: {args.colors}")
+            phase2_video.process_video(args.input, args.colors)
         case 3:
-            print("Phase 3 is not implemented yet.")
+            print(f"--- Starting Phase 3 (Live Camera) ---")
+            phase3_camera.process_live_camera()        
         case 4:
-            print("Phase 4 is not implemented yet.")
+            print(f"--- Starting Phase 4 (Performance Analysis) ---")
+            phase4_game.process_game()
 
 if __name__ == "__main__":
     main()

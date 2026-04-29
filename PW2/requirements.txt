@@ -1,2 +1,10 @@
 pillow
 numpy
+pandas
+scikit-learn
+matplotlib
+opencv-python
+mss
+pygetwindow
+dxcam
+pyvirtualcam

@@ -3,38 +3,126 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-from core.py.octree import Octree
-from utils.macros import LIB_PATH
+from utils.macros import LIB
 
+def run_algorithm(algo: str, original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
+    if not original_image_frame.flags['C_CONTIGUOUS']:
+        original_image_frame = np.ascontiguousarray(original_image_frame)
 
-def run_algorithm(algo: str, original_image: Image.Image, target_colors: int) -> Image.Image:
-    print(f"Running {algo} algorithm with target colors: {target_colors}")
     match algo:
         case "Octree-Baseline":
-            return octree_baseline(original_image, target_colors)
-        case "Greedy":
-            return None
+            return octree_baseline(original_image_frame, target_colors)
         case "Median-Cut":
-            return None
+            return median_cut(original_image_frame, target_colors)
         case "K-Means":
-            return None
-        case "Uniform":
-            return None
+            return kmeans(original_image_frame, target_colors)
+        case "SOM":
+            return som(original_image_frame, target_colors)
+        case "Octree-SOM":
+            return som_octree(original_image_frame, target_colors)
+        case "Octree-K-Means":
+            return None  # Placeholder for future implementation
+        case "Octree-Live":
+            return octree_quantize_live(original_image_frame, target_colors)
         case _:
             raise ValueError(f"Unknown algorithm: {algo}")
 
-# --- 1. Octree Baseline Implementation 
-lib = ctypes.CDLL(str(LIB_PATH))
-lib.octree_quantize_baseline.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_int, ctypes.c_int]
+LIB.octree_quantize_live.restype  = None
+LIB.octree_quantize_live.argtypes = [
+    ctypes.POINTER(ctypes.c_uint8),
+    ctypes.c_int,  
+    ctypes.c_int, 
+]
 
-def octree_baseline(original_image: Image.Image, target_colors: int) -> Image.Image:
+def octree_quantize_live(original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
+    n = original_image_frame.shape[0] * original_image_frame.shape[1]
+    ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+    LIB.octree_quantize_live(ptr, n, target_colors)
+    return original_image_frame    
+
+LIB.octree_quantize_baseline.restype  = None
+LIB.octree_quantize_baseline.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_int, ctypes.c_int]
+
+def octree_baseline(original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
+    total_original_image_frame = original_image_frame.shape[0] * original_image_frame.shape[1]
+    pixel_ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+    LIB.octree_quantize_baseline(pixel_ptr, total_original_image_frame, target_colors)
+    return original_image_frame
+
+def median_cut(original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
+    quantized_array = (original_image_frame >> 3) << 3
+    temp_image = Image.fromarray(quantized_array, 'RGB')
     
-    pixels = np.ascontiguousarray(np.array(original_image, dtype=np.uint8))
-    
-    total_pixels = pixels.shape[0] * pixels.shape[1]
-    
-    pixel_ptr = pixels.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
-    
-    lib.octree_quantize_baseline(pixel_ptr, total_pixels, target_colors)
-    
-    return Image.fromarray(pixels, 'RGB')
+    res = temp_image.quantize(
+        colors=target_colors, 
+        method=Image.Quantize.MEDIANCUT, 
+        dither=Image.Dither.NONE
+    ).convert('RGB')
+
+    return np.array(res, dtype=np.uint8)
+
+LIB.kmeans_quantize.restype  = None
+LIB.kmeans_quantize.argtypes = [
+    ctypes.POINTER(ctypes.c_uint8),   
+    ctypes.c_int,                      
+    ctypes.c_int,                      
+    ctypes.c_int,                      
+    ctypes.c_int,                      
+    ctypes.c_uint32,                  
+]
+
+def kmeans(original_image_frame: np.ndarray, target_colors: int,
+           max_iter: int = 20, seed: int = 42) -> np.ndarray:
+    h, w = original_image_frame.shape[:2]
+    ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+    LIB.kmeans_quantize(ptr, w, h, target_colors, max_iter, seed)
+    return original_image_frame
+
+LIB.som_quantize.restype  = None
+LIB.som_quantize.argtypes = [
+    ctypes.POINTER(ctypes.c_uint8), 
+    ctypes.c_int,                     
+    ctypes.c_int,                     
+    ctypes.c_int,                    
+    ctypes.c_int,                     
+    ctypes.c_float,                   
+    ctypes.c_float,                   
+    ctypes.c_float,                   
+    ctypes.c_uint32,                  
+]
+
+def som(original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
+    h, w = original_image_frame.shape[:2]
+    n = h * w
+    ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+    LIB.som_quantize(ptr, w, h,
+                     target_colors,
+                     n * 2,              
+                     0.62,                
+                     float(target_colors) / 2.0, 
+                     1e-4,               
+                     42)                 
+    return original_image_frame
+
+LIB.som_octree_quantize.restype  = None
+LIB.som_octree_quantize.argtypes = [
+    ctypes.POINTER(ctypes.c_uint8),   # original_image_frame
+    ctypes.c_int,                     # width
+    ctypes.c_int,                     # height
+    ctypes.c_int,                     # K
+    ctypes.c_float,                   # alpha_winner
+    ctypes.c_float,                   # threshold
+    ctypes.c_int,                     # subset_size (0 = all original_image_frame)
+    ctypes.c_uint32,                  # seed
+]
+
+def som_octree(original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
+    h, w = original_image_frame.shape[:2]
+    ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+    LIB.som_octree_quantize(ptr, w, h,
+                            target_colors,
+                            0.5,      # alpha_winner
+                            0.025,    # threshold — paper's recommended value
+                            5000,     # subset_size per iteration
+                            42)
+    return original_image_frame

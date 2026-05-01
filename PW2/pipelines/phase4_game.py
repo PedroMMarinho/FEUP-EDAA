@@ -5,6 +5,8 @@ import numpy as np
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
+import ctypes
+import cv2
 
 from pipelines.phase1_image import run_algorithm
 from utils.macros import ALGORITHMS 
@@ -12,7 +14,6 @@ from utils.macros import ALGORITHMS
 if sys.platform == "win32":
     import pygetwindow as gw
     import dxcam
-    import ctypes
     import pyvirtualcam
     
     GWL_EXSTYLE = -20
@@ -119,7 +120,7 @@ class GhostOverlayApp:
         prev_time = time.time()
 
         while self.running:
-            target_title = self.current_target # Read the safe variable!
+            target_title = self.current_target 
             
             if not target_title:
                 time.sleep(0.1)
@@ -142,8 +143,6 @@ class GhostOverlayApp:
                     if camera.is_capturing: camera.stop()
                     camera.start(region=current_region, target_fps=60)
                     last_region = current_region
-                    
-                    # Lock the ghost window exactly over the game
                     self.overlay_geometry = f"{target_win.width}x{target_win.height}+{target_win.left}+{target_win.top}"
 
             except Exception:
@@ -153,41 +152,42 @@ class GhostOverlayApp:
             frame_rgb = camera.grab()
             if frame_rgb is None: continue
 
-            # --- THE RENDER SCALING TRICK ---
             target_w = target_win.width
             target_h = target_win.height
-            
-            # 1. Shrink the frame to 800x600 for blazing fast C++ processing
-            frame_small = cv2.resize(frame_rgb, (600, 400), interpolation=cv2.INTER_AREA)
-
             algo = self.current_algo
             colors = self.current_colors
 
             try:
-                processed_pil = run_algorithm(algo, frame_small, colors)
-                if processed_pil is None: processed_pil = frame_small
-            except Exception:
-                processed_pil = frame_small
+                if "Acerola" in algo:
 
-            processed_array = np.array(processed_pil)
+                    processed_pil = run_algorithm(algo, frame_rgb, colors)
+                    final_frame = np.array(processed_pil)
+                
+                else:
+                    frame_small = cv2.resize(frame_rgb, (600, 400), interpolation=cv2.INTER_AREA)
+                    
+                    processed_pil = run_algorithm(algo, frame_small, colors)
+                    if processed_pil is None: processed_pil = frame_small
+                    processed_array = np.array(processed_pil)
+                    
+                    final_frame = cv2.resize(processed_array, (target_w, target_h), interpolation=cv2.INTER_NEAREST)
 
-            # 2. Stretch it back to native Full Screen size
-            # INTER_NEAREST keeps the pixels sharp and retro
-            final_frame = cv2.resize(processed_array, (target_w, target_h), interpolation=cv2.INTER_NEAREST)
+            except Exception as e:
+                print(f"Algorithm error: {e}")
+                final_frame = frame_rgb
 
             current_time = time.time()
             fps = 1.0 / (current_time - prev_time) if (current_time - prev_time) > 0 else 0
             prev_time = current_time
 
-            # Draw the FPS box on the final large frame
             cv2.rectangle(final_frame, (target_w - 120, 10), (target_w - 10, 50), (0, 0, 0), -1)
             cv2.putText(final_frame, f"FPS: {int(fps)}", (target_w - 110, 35), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
             self.latest_frame = final_frame
-            final_resized = cv2.resize(final_frame, (1280, 720), 
-                                       interpolation=cv2.INTER_NEAREST)
+            final_resized = cv2.resize(final_frame, (1280, 720), interpolation=cv2.INTER_NEAREST)
             self.vcam.send(final_resized)
+            
         if camera.is_capturing: camera.stop()
 
     def update_ui(self):

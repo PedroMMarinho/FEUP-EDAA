@@ -56,3 +56,31 @@ def calculate_error_metrics(original_img, processed_img):
     mse = np.sum(diff ** 2) / HW
     
     return mae, mse
+
+
+def load_hex_palette(filepath: str) -> np.ndarray:
+    colors = []
+    
+    with open(filepath, 'r') as f:
+        for line in f:
+            hex_str = line.strip()
+            if not hex_str: continue
+            
+            if hex_str.startswith('#'):
+                hex_str = hex_str[1:]
+            elif len(hex_str) == 8 and hex_str.upper().startswith('FF'):
+                hex_str = hex_str[2:]
+                
+            r = int(hex_str[0:2], 16)
+            g = int(hex_str[2:4], 16)
+            b = int(hex_str[4:6], 16)
+            colors.append([r, g, b])
+            
+    palette_array = np.array(colors, dtype=np.uint8)
+    
+    luminance = (0.299 * palette_array[:, 0] + 
+                 0.587 * palette_array[:, 1] + 
+                 0.114 * palette_array[:, 2])
+    
+    sorted_indices = np.argsort(luminance)
+    return palette_array[sorted_indices]

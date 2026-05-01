@@ -1,6 +1,7 @@
 import argparse
 import time
 from pipelines import phase1_image, phase2_video, phase3_camera, phase4_game
+from utils.pallete import init_directory_palettes
 
 def main():
     parser = argparse.ArgumentParser(description="Octree Color Quantizer")
@@ -15,6 +16,8 @@ def main():
                         help="Target number of colors")
     
     args = parser.parse_args()
+    
+    init_directory_palettes()
     match args.phase:
         case 1:
             print(f"--- Starting Phase 1 ---")

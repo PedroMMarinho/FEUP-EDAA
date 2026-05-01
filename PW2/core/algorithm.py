@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 from PIL import Image
 from utils.macros import LIB
+from utils.pallete import get_palette
 
 def run_algorithm(algo: str, original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
     if not original_image_frame.flags['C_CONTIGUOUS']:
@@ -58,11 +59,6 @@ LIB.extract_octree_palette.argtypes = [
 ]
 
 
-import cv2
-import numpy as np
-import ctypes
-from utils.macros import LIB
-
 def shader_acerola(original_image_frame: np.ndarray, 
                    target_colors: int) -> np.ndarray:
     h, w = original_image_frame.shape[:2]
@@ -71,8 +67,9 @@ def shader_acerola(original_image_frame: np.ndarray,
     # TWEAKABLE FIELDS
     pixel_scale = 2            # 1 = HD, 4 = GBA style, 8 = Gameboy style
     apply_sharpness = False    # True = Acerola's edge enhancing matrix
-    custom_spread = 0          # None = Auto-calculate mathematically perfect spread
+    custom_spread = 0        # None = Auto-calculate mathematically perfect spread
     use_palette = True         # True = Extract custom palette from image, False = Uniform quantization
+    use_octree_pallete = False
     # ---------------------------------------------------------
 
     # ==========================================
@@ -99,25 +96,28 @@ def shader_acerola(original_image_frame: np.ndarray,
     # ==========================================
     
     if use_palette:
-        # --- PATH A: OCTREE PALETTE DITHERING ---
-        if not original_image_frame.flags['C_CONTIGUOUS']:
-            original_image_frame = np.ascontiguousarray(original_image_frame)
-        orig_pixel_ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
 
-        # 1. Extract Palette
-        raw_palette_buffer = np.zeros((target_colors, 3), dtype=np.uint8)
-        palette_ptr = raw_palette_buffer.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
-        actual_colors = LIB.extract_octree_palette(orig_pixel_ptr, w, h, target_colors, palette_ptr)
+        if use_octree_pallete:
+            # --- PATH A: OCTREE PALETTE DITHERING ---
+            if not original_image_frame.flags['C_CONTIGUOUS']:
+                original_image_frame = np.ascontiguousarray(original_image_frame)
+            orig_pixel_ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+            # 1. Extract Palette
+            raw_palette_buffer = np.zeros((target_colors, 3), dtype=np.uint8)
+            palette_ptr = raw_palette_buffer.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+            actual_colors = LIB.extract_octree_palette(orig_pixel_ptr, w, h, target_colors, palette_ptr)
+            # 2. Sort Palette by Luminance
+            unsorted_palette = raw_palette_buffer[:actual_colors]
+            luminance = (0.299 * unsorted_palette[:, 0] + 
+                         0.587 * unsorted_palette[:, 1] + 
+                         0.114 * unsorted_palette[:, 2])
+            sorted_indices = np.argsort(luminance)
+            custom_palette = unsorted_palette[sorted_indices]
+        else:
+            # Apply hardcoded pallet
+            custom_palette = get_palette("slso8")
+            actual_colors = len(custom_palette)
 
-        # 2. Sort Palette by Luminance
-        unsorted_palette = raw_palette_buffer[:actual_colors]
-        luminance = (0.299 * unsorted_palette[:, 0] + 
-                     0.587 * unsorted_palette[:, 1] + 
-                     0.114 * unsorted_palette[:, 2])
-        sorted_indices = np.argsort(luminance)
-        custom_palette = unsorted_palette[sorted_indices]
-
-        # 3. Apply Palette Dither
         flat_palette = custom_palette.flatten()
         flat_pal_ptr = flat_palette.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
         spread = custom_spread if custom_spread is not None else (1.0 / (actual_colors - 1.0))

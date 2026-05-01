@@ -41,7 +41,7 @@ class GhostOverlayApp:
         self.running = True
         self.latest_frame = None
 
-        self.vcam = pyvirtualcam.Camera(width=1280, height=720, fps=30)
+        self.vcam = pyvirtualcam.Camera(width=1920, height=1080, fps=60)
         print(f"Virtual camera ready: {self.vcam.device}")
 
         # --- Setup Controls ---
@@ -119,6 +119,9 @@ class GhostOverlayApp:
         last_region = None
         prev_time = time.time()
 
+        screen_width = ctypes.windll.user32.GetSystemMetrics(0)
+        screen_height = ctypes.windll.user32.GetSystemMetrics(1)
+
         while self.running:
             target_title = self.current_target 
             
@@ -137,13 +140,31 @@ class GhostOverlayApp:
                     time.sleep(0.1)
                     continue
 
-                current_region = (target_win.left, target_win.top, target_win.right, target_win.bottom)
+                # ==========================================
+                # NEW: CLAMP THE REGION TO SCREEN BOUNDS
+                # ==========================================
+                left = max(0, target_win.left)
+                top = max(0, target_win.top)
+                right = min(screen_width, target_win.right)
+                bottom = min(screen_height, target_win.bottom)
+
+                # Failsafe: If the window is somehow minimized or completely off-screen
+                if right <= left or bottom <= top:
+                    time.sleep(0.1)
+                    continue
+
+                current_region = (left, top, right, bottom)
 
                 if current_region != last_region:
                     if camera.is_capturing: camera.stop()
+                    # DXCam will now gladly accept this since it's strictly on-screen
                     camera.start(region=current_region, target_fps=60)
                     last_region = current_region
-                    self.overlay_geometry = f"{target_win.width}x{target_win.height}+{target_win.left}+{target_win.top}"
+                    
+                    # Update overlay geometry to match the clamped region!
+                    capture_w = right - left
+                    capture_h = bottom - top
+                    self.overlay_geometry = f"{capture_w}x{capture_h}+{left}+{top}"
 
             except Exception:
                 time.sleep(0.01)
@@ -152,8 +173,11 @@ class GhostOverlayApp:
             frame_rgb = camera.grab()
             if frame_rgb is None: continue
 
-            target_w = target_win.width
-            target_h = target_win.height
+            # ==========================================
+            # UPDATE: Use the clamped width/height, NOT the window width/height
+            # ==========================================
+            target_w = capture_w
+            target_h = capture_h
             algo = self.current_algo
             colors = self.current_colors
 
@@ -185,7 +209,7 @@ class GhostOverlayApp:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
             self.latest_frame = final_frame
-            final_resized = cv2.resize(final_frame, (1280, 720), interpolation=cv2.INTER_NEAREST)
+            final_resized = cv2.resize(final_frame, (1920, 1080), interpolation=cv2.INTER_NEAREST)
             self.vcam.send(final_resized)
             
         if camera.is_capturing: camera.stop()

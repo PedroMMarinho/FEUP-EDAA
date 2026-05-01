@@ -608,4 +608,89 @@ extern "C" {
         }
     }
 
+    // Octree-K-Means Algorithm
+    EXPORT void octree_kmeans_quantize(uint8_t* pixels, int width, int height,
+                                       int K, int max_iter, uint32_t seed)
+    {
+        int n = width * height;
+
+        // ── Step 1: Build Octree and get K colors ─────────────────────────────────
+        OctreeQuantizer quantizer(K);
+        for (int i = 0; i < n; ++i)
+            quantizer.addColor({pixels[i*3], pixels[i*3+1], pixels[i*3+2]});
+
+        std::vector<Color> k_colors = quantizer.getKColors();
+        int actual_K = (int)k_colors.size();
+
+        std::mt19937 rng(seed);
+        if (actual_K < K) {
+            std::uniform_int_distribution<int> rand_color(0, 255);
+            for (int i = actual_K; i < K; ++i) {
+                k_colors.push_back({rand_color(rng), rand_color(rng), rand_color(rng)});
+            }
+            actual_K = K;
+        }
+
+        // ── Step 2: Convert pixel data to float ───────────────────────────────────
+        std::vector<float> data(n * 3);
+        for (int i = 0; i < n * 3; ++i)
+            data[i] = (float)pixels[i];
+
+        // ── Step 3: Initialize centroids from octree colors ───────────────────────
+        std::vector<float> centroids(K * 3);
+        for (int i = 0; i < K; ++i) {
+            centroids[i * 3 + 0] = (float)k_colors[i].r;
+            centroids[i * 3 + 1] = (float)k_colors[i].g;
+            centroids[i * 3 + 2] = (float)k_colors[i].b;
+        }
+
+        // ── Step 4: K-Means clustering with octree initialization ────────────────
+        std::vector<int>   labels(n, 0);
+        std::vector<float> new_centroids(K * 3);
+        std::vector<int>   counts(K);
+
+        for (int iter = 0; iter < max_iter; ++iter) {
+
+            bool changed = false;
+            #pragma omp parallel for schedule(static) reduction(|:changed)
+            for (int i = 0; i < n; ++i) {
+                float best_dist = std::numeric_limits<float>::max();
+                int   best_k    = 0;
+                for (int j = 0; j < K; ++j) {
+                    float dr = data[i*3+0] - centroids[j*3+0];
+                    float dg = data[i*3+1] - centroids[j*3+1];
+                    float db = data[i*3+2] - centroids[j*3+2];
+                    float d  = dr*dr + dg*dg + db*db;
+                    if (d < best_dist) { best_dist = d; best_k = j; }
+                }
+                if (labels[i] != best_k) { labels[i] = best_k; changed = true; }
+            }
+
+            if (!changed) break;
+            std::fill(new_centroids.begin(), new_centroids.end(), 0.0f);
+            std::fill(counts.begin(), counts.end(), 0);
+            for (int i = 0; i < n; ++i) {
+                int j = labels[i];
+                new_centroids[j*3+0] += data[i*3+0];
+                new_centroids[j*3+1] += data[i*3+1];
+                new_centroids[j*3+2] += data[i*3+2];
+                counts[j]++;
+            }
+            for (int j = 0; j < K; ++j) {
+                if (counts[j] > 0) {
+                    centroids[j*3+0] = new_centroids[j*3+0] / counts[j];
+                    centroids[j*3+1] = new_centroids[j*3+1] / counts[j];
+                    centroids[j*3+2] = new_centroids[j*3+2] / counts[j];
+                }
+            }
+        }
+
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < n; ++i) {
+            int j = labels[i];
+            pixels[i*3+0] = (uint8_t)(centroids[j*3+0] + 0.5f);
+            pixels[i*3+1] = (uint8_t)(centroids[j*3+1] + 0.5f);
+            pixels[i*3+2] = (uint8_t)(centroids[j*3+2] + 0.5f);
+        }
+    }
 } // extern "C"

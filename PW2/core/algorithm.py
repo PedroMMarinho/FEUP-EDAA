@@ -21,7 +21,7 @@ def run_algorithm(algo: str, original_image_frame: np.ndarray, target_colors: in
         case "Octree-SOM":
             return som_octree(original_image_frame, target_colors)
         case "Octree-K-Means":
-            return None  # Placeholder for future implementation
+            return octree_kmeans(original_image_frame, target_colors)
         case "Octree-Live":
             return octree_quantize_live(original_image_frame, target_colors)
         case _:
@@ -125,4 +125,21 @@ def som_octree(original_image_frame: np.ndarray, target_colors: int) -> np.ndarr
                             0.025,    # threshold — paper's recommended value
                             5000,     # subset_size per iteration
                             42)
+    return original_image_frame
+
+LIB.octree_kmeans_quantize.restype  = None
+LIB.octree_kmeans_quantize.argtypes = [
+    ctypes.POINTER(ctypes.c_uint8),   # pixels
+    ctypes.c_int,                     # width
+    ctypes.c_int,                     # height
+    ctypes.c_int,                     # K
+    ctypes.c_int,                     # max_iter
+    ctypes.c_uint32,                  # seed
+]
+
+def octree_kmeans(original_image_frame: np.ndarray, target_colors: int,
+                  max_iter: int = 20, seed: int = 42) -> np.ndarray:
+    h, w = original_image_frame.shape[:2]
+    ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+    LIB.octree_kmeans_quantize(ptr, w, h, target_colors, max_iter, seed)
     return original_image_frame

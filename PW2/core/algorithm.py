@@ -1,6 +1,6 @@
 import ctypes
 from pathlib import Path
-
+import cv2
 import numpy as np
 from PIL import Image
 from utils.macros import LIB
@@ -24,8 +24,126 @@ def run_algorithm(algo: str, original_image_frame: np.ndarray, target_colors: in
             return None  # Placeholder for future implementation
         case "Octree-Live":
             return octree_quantize_live(original_image_frame, target_colors)
+        case "Shader-Acerola":
+            return shader_acerola(original_image_frame, target_colors)
         case _:
             raise ValueError(f"Unknown algorithm: {algo}")
+
+LIB.acerola_dither_uniform.restype = None
+LIB.acerola_dither_uniform.argtypes = [
+    ctypes.POINTER(ctypes.c_uint8), # pixels
+    ctypes.c_int,                   # width
+    ctypes.c_int,                   # height
+    ctypes.c_int,                   # steps_per_channel
+    ctypes.c_float                  # spread
+]
+
+LIB.acerola_dither_palette.restype = None
+LIB.acerola_dither_palette.argtypes = [
+    ctypes.POINTER(ctypes.c_uint8), # pixels
+    ctypes.c_int,                   # width
+    ctypes.c_int,                   # height
+    ctypes.POINTER(ctypes.c_uint8), # palette array
+    ctypes.c_int,                   # palette_size
+    ctypes.c_float                  # spread
+]
+
+LIB.extract_octree_palette.restype = ctypes.c_int
+LIB.extract_octree_palette.argtypes = [
+    ctypes.POINTER(ctypes.c_uint8), # pixels
+    ctypes.c_int,                   # width
+    ctypes.c_int,                   # height
+    ctypes.c_int,                   # maxColors
+    ctypes.POINTER(ctypes.c_uint8)  # out_palette (pre-allocated buffer)
+]
+
+
+import cv2
+import numpy as np
+import ctypes
+from utils.macros import LIB
+
+def shader_acerola(original_image_frame: np.ndarray, 
+                   target_colors: int) -> np.ndarray:
+    h, w = original_image_frame.shape[:2]
+    
+    # ---------------------------------------------------------
+    # TWEAKABLE FIELDS
+    pixel_scale = 2            # 1 = HD, 4 = GBA style, 8 = Gameboy style
+    apply_sharpness = False    # True = Acerola's edge enhancing matrix
+    custom_spread = 0          # None = Auto-calculate mathematically perfect spread
+    use_palette = True         # True = Extract custom palette from image, False = Uniform quantization
+    # ---------------------------------------------------------
+
+    # ==========================================
+    # STEP 1: PRE-PROCESSING (Downscale & Sharpen)
+    # ==========================================
+    if pixel_scale > 1:
+        down_w, down_h = w // pixel_scale, h // pixel_scale
+        working_frame = cv2.resize(original_image_frame, (down_w, down_h), interpolation=cv2.INTER_NEAREST)
+    else:
+        working_frame = original_image_frame.copy() 
+        down_w, down_h = w, h
+
+    if apply_sharpness:
+        kernel = np.array([[ 0, -1,  0], [-1,  5, -1], [ 0, -1,  0]])
+        working_frame = cv2.filter2D(working_frame, -1, kernel)
+
+    if not working_frame.flags['C_CONTIGUOUS']:
+        working_frame = np.ascontiguousarray(working_frame)
+
+    work_pixel_ptr = working_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+
+    # ==========================================
+    # STEP 2: DITHERING LOGIC BRANCH
+    # ==========================================
+    
+    if use_palette:
+        # --- PATH A: OCTREE PALETTE DITHERING ---
+        if not original_image_frame.flags['C_CONTIGUOUS']:
+            original_image_frame = np.ascontiguousarray(original_image_frame)
+        orig_pixel_ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+
+        # 1. Extract Palette
+        raw_palette_buffer = np.zeros((target_colors, 3), dtype=np.uint8)
+        palette_ptr = raw_palette_buffer.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+        actual_colors = LIB.extract_octree_palette(orig_pixel_ptr, w, h, target_colors, palette_ptr)
+
+        # 2. Sort Palette by Luminance
+        unsorted_palette = raw_palette_buffer[:actual_colors]
+        luminance = (0.299 * unsorted_palette[:, 0] + 
+                     0.587 * unsorted_palette[:, 1] + 
+                     0.114 * unsorted_palette[:, 2])
+        sorted_indices = np.argsort(luminance)
+        custom_palette = unsorted_palette[sorted_indices]
+
+        # 3. Apply Palette Dither
+        flat_palette = custom_palette.flatten()
+        flat_pal_ptr = flat_palette.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+        spread = custom_spread if custom_spread is not None else (1.0 / (actual_colors - 1.0))
+        
+        LIB.acerola_dither_palette(work_pixel_ptr, down_w, down_h, flat_pal_ptr, actual_colors, spread)
+
+    else:
+        steps_per_channel = max(2, int(round(target_colors ** (1/3.0))))
+        spread = custom_spread if custom_spread is not None else (1.0 / (steps_per_channel - 1.0))
+        
+        LIB.acerola_dither_uniform(work_pixel_ptr, down_w, down_h, steps_per_channel, spread)
+
+
+    # ==========================================
+    # STEP 3: POST-PROCESSING (Upscale)
+    # ==========================================
+    if pixel_scale > 1:
+        final_frame = cv2.resize(working_frame, (w, h), interpolation=cv2.INTER_NEAREST)
+    else:
+        final_frame = working_frame
+
+    return final_frame
+
+
+
+
 
 LIB.octree_quantize_live.restype  = None
 LIB.octree_quantize_live.argtypes = [

@@ -20,5 +20,6 @@ ALGORITHMS = [
     "SOM",
     "Octree-SOM",
     "Octree-K-Means",
-    "Octree-Live"
+    "Octree-Live",
+    "Shader-Acerola"
 ]

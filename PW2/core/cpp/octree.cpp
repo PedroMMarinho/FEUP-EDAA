@@ -190,7 +190,120 @@ static int g_pal_size = 0;
 static int g_frame_count = 0;
 static int g_refresh_every = 30; 
 
+// For accerola shadder
+static const int bayer8[8 * 8] = {
+    0, 32, 8, 40, 2, 34, 10, 42,
+    48, 16, 56, 24, 50, 18, 58, 26,  
+    12, 44,  4, 36, 14, 46,  6, 38, 
+    60, 28, 52, 20, 62, 30, 54, 22,  
+    3, 35, 11, 43,  1, 33,  9, 41,  
+    51, 19, 59, 27, 49, 17, 57, 25, 
+    15, 47,  7, 39, 13, 45,  5, 37, 
+    63, 31, 55, 23, 61, 29, 53, 21
+};
+
+
 extern "C" {
+    // Accerola Shader
+    // MODE 1: UNIFORM RGB (No Palette Provided)
+    // Calculates nearest colors mathematically per-channel.
+    EXPORT void acerola_dither_uniform(uint8_t* pixels, int width, int height, int steps_per_channel, float spread) {
+        if (steps_per_channel < 2) steps_per_channel = 2;
+        float step_factor = steps_per_channel - 1.0f;
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int idx = (y * width + x) * 3;
+
+                // Step 1: Get the dither noise value for this specific screen coordinate.
+                // We divide by 64.0f to normalize the matrix [0 to 63] down to [0.0 to 1.0].
+                // We subtract 0.5f to center the noise around 0 [-0.5 to 0.5].
+                int bayer_idx = (x % 8) + (y % 8) * 8;
+                float bayer_val = (bayer8[bayer_idx] / 64.0f) - 0.5f;
+
+                // Process Red, Green, and Blue independently
+                for (int c = 0; c < 3; c++) {
+                    float color = pixels[idx + c] / 255.0f;     // Normalize to [0.0, 1.0]
+                    color += spread * bayer_val;                // Step 2: Add dither noise
+                    
+                    if (color < 0.0f) color = 0.0f;             // Clamp limits
+                    if (color > 1.0f) color = 1.0f;
+
+                    // Step 3: Compress the color palette (Quantization)
+                    // Multiply by steps, round to nearest integer, divide by steps.
+                    float quantized = std::floor(step_factor * color + 0.5f) / step_factor;
+
+                    pixels[idx + c] = static_cast<uint8_t>(quantized * 255.0f); // Map back to 0-255
+                }
+            }
+        }
+    }
+
+    // MODE 2: CUSTOM PALETTE (Palette Provided)
+    // Maps grayscale luminance to a 1D color palette array.
+    EXPORT void acerola_dither_palette(uint8_t* pixels, int width, int height, uint8_t* palette, int palette_size, float spread) {
+        if (palette_size < 2) return; 
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int idx = (y * width + x) * 3;
+
+                // Step 1: Get dither noise
+                int bayer_idx = (x % 8) + (y % 8) * 8;
+                float bayer_val = (bayer8[bayer_idx] / 64.0f) - 0.5f;
+
+                // Step 2: Convert RGB to Grayscale (Luminance)
+                float r = pixels[idx] / 255.0f;
+                float g = pixels[idx + 1] / 255.0f;
+                float b = pixels[idx + 2] / 255.0f;
+                float luminance = (0.299f * r) + (0.587f * g) + (0.114f * b);
+
+                // Step 3: Add dither noise to the grayscale value
+                luminance += spread * bayer_val;
+
+                if (luminance < 0.0f) luminance = 0.0f;
+                if (luminance > 1.0f) luminance = 1.0f;
+
+                // Step 4: Map the noisy grayscale value to a palette index
+                // A luminance of 0.0 picks the first color, 1.0 picks the last color.
+                int palette_index = static_cast<int>(std::round(luminance * (palette_size - 1)));
+
+                // Safety bounds check
+                if (palette_index < 0) palette_index = 0;
+                if (palette_index >= palette_size) palette_index = palette_size - 1;
+
+                // Step 5: Overwrite the pixel with the chosen color from the palette
+                int pal_idx = palette_index * 3;
+                pixels[idx]     = palette[pal_idx];
+                pixels[idx + 1] = palette[pal_idx + 1];
+                pixels[idx + 2] = palette[pal_idx + 2];
+            }
+        }
+    }
+    // Use for custom pallet extraction
+    EXPORT int extract_octree_palette(uint8_t* pixels, int width, int height, int maxColors, uint8_t* out_palette) {
+        OctreeQuantizer octree(maxColors);
+        int total_pixels = width * height;
+        
+        for (int i = 0; i < total_pixels; i++) {
+            Color c = { pixels[i * 3], pixels[i * 3 + 1], pixels[i * 3 + 2] };
+            octree.addColor(c);
+        }
+
+        std::vector<Color> palette = octree.getPalette();
+        int actual_colors = palette.size();
+
+        for (int i = 0; i < actual_colors; i++) {
+            out_palette[i * 3]     = palette[i].r;
+            out_palette[i * 3 + 1] = palette[i].g;
+            out_palette[i * 3 + 2] = palette[i].b;
+        }
+
+        return actual_colors;
+    }
+    
+
+
     // Live Quantization #
     EXPORT void build_octree_palette(unsigned char* pixels, int num_pixels, int max_colors) {
         OctreeQuantizer quantizer(max_colors);

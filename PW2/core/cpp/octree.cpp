@@ -19,6 +19,12 @@
     #define EXPORT __attribute__((visibility("default")))
 #endif
 
+// K-means Octree Hybrid Quantizer Implementation
+struct OctreeLeaf {
+    float r, g, b;
+    int pixelCount;
+};
+
 struct Color {
     int r, g, b;
 };
@@ -152,6 +158,20 @@ private:
         }
     }
 
+    void collectWeightedLeaves(OctreeNode* node, std::vector<OctreeLeaf>& out) {
+        if (!node) return;
+        if (node->isLeaf) {
+            out.push_back({
+                (float)(node->sumR) / node->colorCount,
+                (float)(node->sumG) / node->colorCount,
+                (float)(node->sumB) / node->colorCount,
+                node->colorCount
+            });
+        } else {
+            for (int i = 0; i < 8; ++i) collectWeightedLeaves(node->children[i], out);
+        }
+    }
+
 public:
     OctreeQuantizer(int maxColors) : maxColors(maxColors) {}
 
@@ -177,6 +197,12 @@ public:
         std::vector<Color> palette;
         buildColorTable(root, palette);
         return palette;
+    }
+
+    std::vector<OctreeLeaf> getWeightedLeaves() {
+        std::vector<OctreeLeaf> out;
+        collectWeightedLeaves(root, out);
+        return out;
     }
 
     int getMappedIndex(const Color& color) {
@@ -721,4 +747,108 @@ extern "C" {
         }
     }
 
+    // Octree-K-Means Algorithm
+    EXPORT void octree_kmeans_quantize(uint8_t* pixels, int width, int height,
+                                   int K, int max_iter, uint32_t seed)
+    {
+    int n = width * height;
+
+    // ── Step 1: Build Octree with MORE colors than K ────────────────────────
+    // 4096 is a great sweet spot. It's enough to capture all the detail, 
+    int max_tree_leaves = std::max(K * 32, 4096); 
+    OctreeQuantizer quantizer(max_tree_leaves);
+    
+    for (int i = 0; i < n; ++i) {
+        quantizer.addColor({pixels[i*3], pixels[i*3+1], pixels[i*3+2]});
+    }
+
+    std::vector<OctreeLeaf> leaves = quantizer.getWeightedLeaves();
+    int num_leaves = (int)leaves.size();
+
+    std::vector<float> centroids(K * 3);
+    std::mt19937 rng(seed);
+    
+    std::vector<OctreeLeaf> sorted_leaves = leaves;
+    std::sort(sorted_leaves.begin(), sorted_leaves.end(), 
+              [](const OctreeLeaf& a, const OctreeLeaf& b) { return a.pixelCount > b.pixelCount; });
+
+    for (int i = 0; i < K; ++i) {
+        if (i < num_leaves) {
+            centroids[i*3+0] = sorted_leaves[i].r;
+            centroids[i*3+1] = sorted_leaves[i].g;
+            centroids[i*3+2] = sorted_leaves[i].b;
+        } else { 
+            std::uniform_real_distribution<float> rand_color(0.0f, 255.0f);
+            centroids[i*3+0] = rand_color(rng);
+            centroids[i*3+1] = rand_color(rng);
+            centroids[i*3+2] = rand_color(rng);
+        }
+    }
+
+    // ── Step 3: Fast Weighted K-Means on Leaves ─────────────────
+    std::vector<int> leaf_labels(num_leaves, 0);
+    std::vector<float> new_centroids(K * 3);
+    std::vector<int> counts(K);
+
+    for (int iter = 0; iter < max_iter; ++iter) {
+        bool changed = false;
+
+        for (int i = 0; i < num_leaves; ++i) {
+            float best_dist = std::numeric_limits<float>::max();
+            int best_k = 0;
+            for (int j = 0; j < K; ++j) {
+                float dr = leaves[i].r - centroids[j*3+0];
+                float dg = leaves[i].g - centroids[j*3+1];
+                float db = leaves[i].b - centroids[j*3+2];
+                float d = dr*dr + dg*dg + db*db;
+                if (d < best_dist) { best_dist = d; best_k = j; }
+            }
+            if (leaf_labels[i] != best_k) { leaf_labels[i] = best_k; changed = true; }
+        }
+
+        if (!changed) break;
+
+        std::fill(new_centroids.begin(), new_centroids.end(), 0.0f);
+        std::fill(counts.begin(), counts.end(), 0);
+
+        for (int i = 0; i < num_leaves; ++i) {
+            int j = leaf_labels[i];
+            int weight = leaves[i].pixelCount;
+            new_centroids[j*3+0] += leaves[i].r * weight;
+            new_centroids[j*3+1] += leaves[i].g * weight;
+            new_centroids[j*3+2] += leaves[i].b * weight;
+            counts[j] += weight;
+        }
+
+        for (int j = 0; j < K; ++j) {
+            if (counts[j] > 0) {
+                centroids[j*3+0] = new_centroids[j*3+0] / counts[j];
+                centroids[j*3+1] = new_centroids[j*3+1] / counts[j];
+                centroids[j*3+2] = new_centroids[j*3+2] / counts[j];
+            }
+        }
+    }
+
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < n; ++i) {
+        float r = (float)pixels[i*3+0];
+        float g = (float)pixels[i*3+1];
+        float b = (float)pixels[i*3+2];
+
+        float best_dist = std::numeric_limits<float>::max();
+        int best_k = 0;
+
+        for (int j = 0; j < K; ++j) {
+            float dr = r - centroids[j*3+0];
+            float dg = g - centroids[j*3+1];
+            float db = b - centroids[j*3+2];
+            float d = dr*dr + dg*dg + db*db;
+            if (d < best_dist) { best_dist = d; best_k = j; }
+        }
+
+        pixels[i*3+0] = (uint8_t)(centroids[best_k*3+0] + 0.5f);
+        pixels[i*3+1] = (uint8_t)(centroids[best_k*3+1] + 0.5f);
+        pixels[i*3+2] = (uint8_t)(centroids[best_k*3+2] + 0.5f);
+    }
+  }
 } // extern "C"

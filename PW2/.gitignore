@@ -1,4 +1,7 @@
 __pycache__
 assets/output/modified_images
 assets/output/modified_videos
-octree_lib.*
+octree_lib.so
+octree_lib.exp
+octree_lib.dll
+octree_lib.lib

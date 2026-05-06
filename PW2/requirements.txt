@@ -8,3 +8,5 @@ mss
 pygetwindow
 dxcam
 pyvirtualcam
+imageio[ffmpeg]
+tqdm

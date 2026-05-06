@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Octree Quantizer Visualizer</title>
+<style>
+:root {
+  --font-sans: system-ui, -apple-system, sans-serif;
+  --font-mono: monospace;
+  --color-background-primary: #ffffff;
+  --color-background-secondary: #f4f4f5;
+  --color-border-secondary: #e4e4e7;
+  --color-border-tertiary: #d4d4d8;
+  --color-text-primary: #18181b;
+  --color-text-secondary: #52525b;
+  --color-text-tertiary: #a1a1aa;
+  --border-radius-md: 6px;
+  --border-radius-lg: 12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans); background: #fafafa;}
+#app{padding:1.5rem 2rem;max-width:680px; margin: 0 auto;}
+h2.title{font-size:18px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px}
+p.sub{font-size:13px;color:var(--color-text-secondary);margin-bottom:1.5rem}
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+label{font-size:13px;color:var(--color-text-secondary)}
+input[type=range]{flex:1;min-width:80px}
+input[type=number]{width:64px;font-size:13px;padding:4px 8px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary)}
+.drop-zone{border:1.5px dashed var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:2rem;text-align:center;cursor:pointer;transition:background .2s;color:var(--color-text-secondary);font-size:14px}
+.drop-zone:hover{background:var(--color-background-secondary)}
+.drop-zone.has-img{padding:0;border-style:solid;overflow:hidden}
+.drop-zone.has-img img{width:100%;display:block;border-radius:var(--border-radius-lg)}
+button{padding:8px 20px;font-size:14px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-primary);cursor:pointer;transition:background .15s}
+button:hover{background:var(--color-background-secondary)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.primary{background:var(--color-text-primary);color:var(--color-background-primary);border-color:transparent}
+button.primary:hover{opacity:.85}
+.steps-bar{display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap}
+.step-pill{padding:4px 12px;font-size:12px;border-radius:20px;border:0.5px solid var(--color-border-tertiary);color:var(--color-text-tertiary);background:var(--color-background-secondary);transition:all .2s}
+.step-pill.active{background:var(--color-text-primary);color:var(--color-background-primary);border-color:transparent}
+.step-pill.done{border-color:var(--color-border-secondary);color:var(--color-text-secondary)}
+#tree-canvas{width:100%;display:block;border-radius:var(--border-radius-md);background:var(--color-background-secondary)}
+.stat-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.stat{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:8px 14px;flex:1;min-width:80px}
+.stat .n{font-size:20px;font-weight:500;color:var(--color-text-primary)}
+.stat .l{font-size:12px;color:var(--color-text-secondary);margin-top:2px}
+.palette-strip{display:flex;gap:4px;flex-wrap:wrap;margin-top:10px}
+.swatch{width:32px;height:32px;border-radius:6px;border:0.5px solid var(--color-border-tertiary);flex-shrink:0;cursor:default;transition:transform .1s}
+.swatch:hover{transform:scale(1.2)}
+.imgs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px}
+.img-box{text-align:center}
+.img-box canvas,.img-box img{width:100%;border-radius:var(--border-radius-md);display:block;border:0.5px solid var(--color-border-tertiary)}
+.img-box p{font-size:12px;color:var(--color-text-secondary);margin-top:6px}
+#log{font-size:12px;color:var(--color-text-secondary);height:60px;overflow-y:auto;font-family:var(--font-mono);padding:8px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)}
+.progress-wrap{height:4px;background:var(--color-background-secondary);border-radius:2px;overflow:hidden;margin-top:8px}
+.progress-bar{height:100%;width:0%;background:var(--color-text-primary);transition:width .1s}
+</style>
+</head>
+<body>
+<div id="app">
+  <h2 class="title">Octree Color Quantizer</h2>
+  <p class="sub">Upload an image, pick a palette size, and watch the octree build step by step.</p>
+
+  <div class="card">
+    <div class="row" style="margin-bottom:12px">
+      <label>Max colors</label>
+      <input type="range" id="slider" min="2" max="256" value="16" step="1" oninput="document.getElementById('nval').value=this.value; reset()">
+      <input type="number" id="nval" value="16" min="2" max="256" oninput="document.getElementById('slider').value=this.value; reset()">
+    </div>
+    <div class="drop-zone" id="drop" onclick="document.getElementById('filein').click()">
+      Click or drop an image here
+      <input type="file" id="filein" accept="image/*" style="display:none" onchange="loadFile(this.files[0])">
+    </div>
+  </div>
+
+  <div id="controls" style="display:none" class="card">
+    <div class="steps-bar">
+      <div class="step-pill active" id="pill-0">1 · Upload</div>
+      <div class="step-pill" id="pill-1">2 · Insert colors</div>
+      <div class="step-pill" id="pill-2">3 · Reduce tree</div>
+      <div class="step-pill" id="pill-3">4 · Build palette</div>
+      <div class="step-pill" id="pill-4">5 · Quantize</div>
+    </div>
+    
+    <!-- NEW TIMELINE CONTROLS -->
+    <div class="row" style="gap:8px;margin-bottom:12px">
+      <button class="primary" id="btn-play" onclick="togglePlay()">▶ Play</button>
+      <button id="btn-prev" onclick="stepPrev()">⏮ Prev</button>
+      <button id="btn-next" onclick="stepNext()">Next ⏭</button>
+      <button id="btn-reset" onclick="reset()">Reset</button>
+    </div>
+    <div class="row" style="gap:8px;margin-bottom:12px">
+      <label style="width: 50px;">Speed:</label>
+      <input type="range" id="speed-slider" min="1" max="100" value="70">
+    </div>
+
+    <div id="log">Ready. Press Play or step through manually.</div>
+    <div class="progress-wrap"><div class="progress-bar" id="prog"></div></div>
+  </div>
+
+  <div id="viz-card" style="display:none" class="card">
+    <div style="font-size:14px;font-weight:500;margin-bottom:8px">Octree structure</div>
+    <canvas id="tree-canvas" height="220"></canvas>
+    <div class="stat-row">
+      <div class="stat"><div class="n" id="s-leaves">0</div><div class="l">Leaf nodes</div></div>
+      <div class="stat"><div class="n" id="s-internal">0</div><div class="l">Internal nodes</div></div>
+      <div class="stat"><div class="n" id="s-reduces">0</div><div class="l">Reductions</div></div>
+      <div class="stat"><div class="n" id="s-colors">0</div><div class="l">Palette colors</div></div>
+    </div>
+  </div>
+
+  <div id="palette-card" style="display:none" class="card">
+    <div style="font-size:14px;font-weight:500;margin-bottom:6px">Final palette</div>
+    <div class="palette-strip" id="palette-strip"></div>
+  </div>
+
+  <div id="result-card" style="display:none" class="card">
+    <div style="font-size:14px;font-weight:500;margin-bottom:10px">Result</div>
+    <div class="imgs">
+      <div class="img-box"><img id="orig-img"><p>Original</p></div>
+      <div class="img-box"><canvas id="quant-canvas"></canvas><p>Quantized</p></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────
+let imgData=null, origPixels=null, W=0, H=0;
+let palette=[], rootNode=null, maxColors=16;
+let leafCount=0, reductionCount=0;
+
+// TIMELINE ENGINE STATE
+let timeline = [];
+let currentFrameIndex = 0;
+let isPlaying = false;
+let playTimer = null;
+
+// ── Octree impl ────────────────────────────────────
+function mkNode(level){
+  return{level,isLeaf:false,colorCount:0,sumR:0,sumG:0,sumB:0,colorIndex:-1,children:new Array(8).fill(null),nextNode:null};
+}
+let reduceList=new Array(8).fill(null);
+
+function branch(r,g,b,depth){
+  let shift=7-depth;
+  return(((r>>shift)&1)<<2)|(((g>>shift)&1)<<1)|((b>>shift)&1);
+}
+
+function insertColor(r,g,b){
+  let node=rootNode, depth=0;
+  while(true){
+    if(!node.children) break;
+    if(depth===8||node.isLeaf){node.colorCount++;node.sumR+=r;node.sumG+=g;node.sumB+=b;break;}
+    let br=branch(r,g,b,depth);
+    if(!node.children[br]){
+      let n=mkNode(depth+1);
+      if(depth+1===8){n.isLeaf=true;leafCount++;}
+      else{n.nextNode=reduceList[depth+1];reduceList[depth+1]=n;}
+      node.children[br]=n;
+    }
+    node=node.children[br];depth++;
+    if(node.isLeaf){node.colorCount++;node.sumR+=r;node.sumG+=g;node.sumB+=b;break;}
+  }
+}
+
+function reduceOne(){
+  let d=7;
+  while(d>=0&&!reduceList[d]) d--;
+  if(d<0) return;
+  let node=reduceList[d];
+  reduceList[d]=node.nextNode;
+  let kids=0;
+  for(let i=0;i<8;i++){
+    if(node.children[i]){
+      node.sumR+=node.children[i].sumR;
+      node.sumG+=node.children[i].sumG;
+      node.sumB+=node.children[i].sumB;
+      node.colorCount+=node.children[i].colorCount;
+      node.children[i]=null;kids++;
+    }
+  }
+  node.isLeaf=true;
+  leafCount-=(kids-1);
+  reductionCount++;
+}
+
+function buildPalette(){
+  palette=[];
+  function walk(n){
+    if(!n) return;
+    if(n.isLeaf){
+      n.colorIndex=palette.length;
+      palette.push([Math.round(n.sumR/n.colorCount),Math.round(n.sumG/n.colorCount),Math.round(n.sumB/n.colorCount)]);
+    } else { for(let i=0;i<8;i++) walk(n.children[i]); }
+  }
+  walk(rootNode);
+}
+
+// ── Tree snapshot (depth-limited for drawing) ──────
+function snapshotTree(maxDepth){
+  let nodes=[], edges=[];
+  function walk(n,id,pid,depth){
+    if(!n||depth>maxDepth) return;
+    nodes.push({id,isLeaf:n.isLeaf,colorCount:n.colorCount,depth,
+      avgR:n.colorCount?Math.round(n.sumR/n.colorCount):128,
+      avgG:n.colorCount?Math.round(n.sumG/n.colorCount):128,
+      avgB:n.colorCount?Math.round(n.sumB/n.colorCount):128});
+    if(pid!==null) edges.push({from:pid,to:id});
+    let ci=0;
+    for(let i=0;i<8;i++){if(n.children[i])walk(n.children[i],id*10+ci++,id,depth+1);}
+  }
+  walk(rootNode,0,null,0);
+  return{nodes,edges};
+}
+
+// ── Timeline Generation ────────────────────────────────────
+function recordFrame(phase, msg, prog, qImageData = null) {
+  let internal = 0;
+  function countInt(n){if(!n)return;if(!n.isLeaf)internal++;for(let i=0;i<8;i++)countInt(n.children[i]);}
+  countInt(rootNode);
+
+  timeline.push({
+    phase, log: msg, progress: prog,
+    stats: { leaves: leafCount, internal, reduces: reductionCount, colors: palette.length },
+    tree: snapshotTree(4),
+    palette: [...palette],
+    quantData: qImageData ? new Uint8ClampedArray(qImageData) : null
+  });
+}
+
+function generateTimeline() {
+  log("Pre-computing timeline data... Please wait.");
+  timeline = [];
+  maxColors = parseInt(document.getElementById('nval').value) || 16;
+  rootNode = mkNode(0); reduceList = new Array(8).fill(null);
+  leafCount = 0; reductionCount = 0; palette = [];
+
+  recordFrame(0, "Ready.", 0);
+  
+  const total = W * H;
+  const insertBatch = Math.max(1, Math.floor(total / 100));
+
+  for (let i = 0; i < total; i++) {
+    const r = origPixels[i*4], g = origPixels[i*4+1], b = origPixels[i*4+2];
+    insertColor(r, g, b);
+
+    if (i % insertBatch === 0 || i === total - 1) {
+      recordFrame(1, `Inserting colors: Pixel ${i}/${total}`, (i/total)*0.4);
+    }
+
+    let reduced = false;
+    while(leafCount > maxColors) {
+      reduceOne();
+      reduced = true;
+    }
+    if (reduced) recordFrame(2, `Max colors exceeded. Triggered dynamic reduction. Leaves: ${leafCount}`, (i/total)*0.4);
+  }
+
+  recordFrame(2, "Insertion and reductions complete.", 0.5);
+  buildPalette();
+  recordFrame(3, `Palette built with ${palette.length} colors.`, 0.6);
+
+  const outData = new Uint8ClampedArray(origPixels);
+  const qBatch = Math.max(1, Math.floor(total / 50));
+  
+  for (let i = 0; i < total; i++) {
+    const r = origPixels[i*4], g = origPixels[i*4+1], b = origPixels[i*4+2];
+    let best=0, bestD=Infinity;
+    for(let j=0; j<palette.length; j++){
+      const dr=r-palette[j][0], dg=g-palette[j][1], db=b-palette[j][2];
+      const d = dr*dr + dg*dg + db*db;
+      if(d < bestD){ bestD=d; best=j; if(bestD===0)break; }
+    }
+    outData[i*4] = palette[best][0];
+    outData[i*4+1] = palette[best][1];
+    outData[i*4+2] = palette[best][2];
+    outData[i*4+3] = 255;
+
+    if (i % qBatch === 0 || i === total - 1) {
+      recordFrame(4, `Quantizing image: Pixel ${i}/${total}`, 0.6 + (i/total)*0.4, outData);
+    }
+  }
+}
+
+// ── Playback Controls ────────────────────────────────────
+function togglePlay() {
+  if (!origPixels) return;
+  if (!timeline.length) {
+    generateTimeline();
+    currentFrameIndex = 0;
+  }
+  
+  isPlaying = !isPlaying;
+  document.getElementById('btn-play').innerHTML = isPlaying ? "⏸ Pause" : "▶ Play";
+  
+  if (isPlaying) playLoop();
+  else clearTimeout(playTimer);
+}
+
+function playLoop() {
+  if (!isPlaying) return;
+  stepNext();
+  if (currentFrameIndex < timeline.length - 1) {
+    let speedVal = document.getElementById('speed-slider').value;
+    let delay = 1016 - (speedVal * 10); 
+    if (delay < 16) delay = 16; // Max 60fps
+    playTimer = setTimeout(playLoop, delay);
+  } else {
+    isPlaying = false;
+    document.getElementById('btn-play').innerHTML = "▶ Play";
+  }
+}
+
+function stepNext() {
+  if (!timeline.length) { generateTimeline(); currentFrameIndex = -1; }
+  if (currentFrameIndex < timeline.length - 1) {
+    currentFrameIndex++;
+    renderFrame(currentFrameIndex);
+  } else {
+    isPlaying = false;
+    document.getElementById('btn-play').innerHTML = "▶ Play";
+  }
+}
+
+function stepPrev() {
+  if (!timeline.length) { generateTimeline(); currentFrameIndex = timeline.length; }
+  if (currentFrameIndex > 0) {
+    currentFrameIndex--;
+    renderFrame(currentFrameIndex);
+  }
+}
+
+// ── Rendering Engine ────────────────────────────────────
+function renderFrame(idx) {
+  const frame = timeline[idx];
+  if (!frame) return;
+
+  setPill(frame.phase);
+  log(frame.log);
+  setProgress(frame.progress);
+
+  document.getElementById('s-leaves').textContent = frame.stats.leaves;
+  document.getElementById('s-internal').textContent = frame.stats.internal;
+  document.getElementById('s-reduces').textContent = frame.stats.reduces;
+  document.getElementById('s-colors').textContent = frame.stats.colors;
+
+  drawTree(frame.tree);
+
+  if (frame.palette.length > 0) {
+    document.getElementById('palette-card').style.display = 'block';
+    const strip = document.getElementById('palette-strip');
+    strip.innerHTML = '';
+    frame.palette.forEach(([r,g,b]) => {
+      const sw = document.createElement('div');
+      sw.className = 'swatch';
+      sw.style.background = `rgb(${r},${g},${b})`;
+      strip.appendChild(sw);
+    });
+  } else {
+    document.getElementById('palette-card').style.display = 'none';
+  }
+
+  if (frame.quantData) {
+    document.getElementById('result-card').style.display = 'block';
+    const cv = document.getElementById('quant-canvas');
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+    const idata = new ImageData(frame.quantData, W, H);
+    ctx.putImageData(idata, 0, 0);
+  } else {
+    document.getElementById('result-card').style.display = 'none';
+  }
+}
+
+function drawTree(snap){
+  const cv=document.getElementById('tree-canvas');
+  const ctx=cv.getContext('2d');
+  const W2=cv.offsetWidth||620; cv.width=W2; cv.height=220;
+  ctx.clearRect(0,0,W2,220);
+
+  if(!snap || !snap.nodes.length) return;
+
+  const byDepth={};
+  snap.nodes.forEach(n=>{(byDepth[n.depth]=byDepth[n.depth]||[]).push(n);});
+  const maxD=Math.max(...Object.keys(byDepth).map(Number));
+
+  const posMap={};
+  const R=9;
+  Object.keys(byDepth).sort((a,b)=>a-b).forEach(d=>{
+    const arr=byDepth[d];
+    const y=20+d*(180/Math.max(maxD,1));
+    arr.forEach((n,i)=>{
+      const x=W2*(i+1)/(arr.length+1);
+      posMap[n.id]={x,y};
+    });
+  });
+
+  ctx.lineWidth=0.8;
+  snap.edges.forEach(e=>{
+    const a=posMap[e.from], b=posMap[e.to];
+    if(!a||!b) return;
+    ctx.beginPath();ctx.strokeStyle='rgba(128,128,128,0.3)';
+    ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+  });
+
+  snap.nodes.forEach(n=>{
+    const p=posMap[n.id]; if(!p) return;
+    ctx.beginPath();
+    if(n.isLeaf){
+      ctx.fillStyle=`rgb(${n.avgR},${n.avgG},${n.avgB})`;
+      ctx.strokeStyle='rgba(0,0,0,0.25)';
+    } else {
+      ctx.fillStyle='rgba(128,128,128,0.18)';
+      ctx.strokeStyle='rgba(128,128,128,0.5)';
+    }
+    ctx.lineWidth=n.isLeaf?1:0.5;
+    ctx.arc(p.x,p.y,n.isLeaf?R:6,0,Math.PI*2);
+    ctx.fill();ctx.stroke();
+  });
+}
+
+// ── UI Helpers ────────────────────────────────────
+function log(msg){const el=document.getElementById('log');el.textContent=msg;el.scrollTop=el.scrollHeight;}
+function setProgress(v){document.getElementById('prog').style.width=(v*100)+'%';}
+function setPill(i){
+  for(let k=0;k<5;k++){
+    let p=document.getElementById('pill-'+k);
+    p.className='step-pill'+(k===i?' active':k<i?' done':'');
+  }
+}
+
+function loadFile(file){
+  if(!file) return;
+  const url=URL.createObjectURL(file);
+  const img=new Image();
+  img.onload=()=>{
+    const MAX=120;
+    let sw=img.width, sh=img.height;
+    if(sw>MAX||sh>MAX){let s=Math.min(MAX/sw,MAX/sh);sw=Math.round(sw*s);sh=Math.round(sh*s);}
+    W=sw;H=sh;
+    const tmp=document.createElement('canvas');tmp.width=W;tmp.height=H;
+    const tc=tmp.getContext('2d');tc.drawImage(img,0,0,W,H);
+    origPixels=new Uint8ClampedArray(tc.getImageData(0,0,W,H).data);
+
+    const drop=document.getElementById('drop');
+    drop.className='drop-zone has-img';
+    drop.innerHTML=`<img src="${url}" style="max-height:200px;object-fit:contain">`;
+    document.getElementById('orig-img').src=url;
+    
+    document.getElementById('controls').style.display='block';
+    document.getElementById('viz-card').style.display='block';
+    reset();
+  };
+  img.src=url;
+}
+
+function reset(){
+  clearTimeout(playTimer);
+  isPlaying = false;
+  document.getElementById('btn-play').innerHTML = "▶ Play";
+  
+  timeline = [];
+  currentFrameIndex = 0;
+  
+  for(let k=0;k<5;k++) document.getElementById('pill-'+k).className='step-pill'+(k===0?' active':'');
+  
+  document.getElementById('result-card').style.display='none';
+  document.getElementById('palette-card').style.display='none';
+  document.getElementById('s-leaves').textContent='0';
+  document.getElementById('s-internal').textContent='0';
+  document.getElementById('s-reduces').textContent='0';
+  document.getElementById('s-colors').textContent='0';
+  
+  const cv=document.getElementById('tree-canvas');
+  cv.getContext('2d').clearRect(0,0,cv.width,cv.height);
+  
+  setProgress(0);
+  log('Reset. Ready to process.');
+}
+
+window.addEventListener('dragover',e=>e.preventDefault());
+window.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f&&f.type.startsWith('image/')) loadFile(f);});
+</script>
+</body>
+</html>

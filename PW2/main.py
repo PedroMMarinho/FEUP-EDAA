@@ -21,13 +21,15 @@ def main():
     match args.phase:
         case 1:
             print(f"--- Starting Phase 1 ---")
+            
+            if args.stats:
+                print(f"--- Generating Statistics ---")
+                phase1_image.generate_statistics_charts(args.input)
+                return
+            
             if args.input:
                 print(f"Input: {args.input} | Target Colors: {args.colors}")
                 phase1_image.process_target(args.input, args.colors)
-
-            if args.stats:
-                print(f"--- Generating Statistics ---")
-                phase1_image.generate_statistics_charts()
                 
         case 2:
             print(f"--- Starting Phase 2 (Video Processing) ---")

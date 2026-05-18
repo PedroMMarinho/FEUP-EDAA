@@ -135,7 +135,7 @@ def generate_statistics_charts():
     stat_path = OUTPUT_STATS_DIR / "image_charts"
     stat_path.mkdir(parents=True, exist_ok=True)
 
-    csv_file = OUTPUT_CSV_DIR / "benchmark_stats_final.csv"
+    csv_file = OUTPUT_CSV_DIR / "benchmark_stats_final_v2.csv"
     if not csv_file.exists():
         print(f"Error: CSV file '{csv_file}' not found. Please run the benchmark first.")
         return

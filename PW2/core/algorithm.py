@@ -65,10 +65,11 @@ def shader_acerola(original_image_frame: np.ndarray,
     
     # ---------------------------------------------------------
     # TWEAKABLE FIELDS
-    pixel_scale = 2            # 1 = HD, 4 = GBA style, 8 = Gameboy style
-    apply_sharpness = False    # True = Acerola's edge enhancing matrix
-    custom_spread = 0        # None = Auto-calculate mathematically perfect spread
-    use_palette = True         # True = Extract custom palette from image, False = Uniform quantization
+    pixel_scale = 2             # 1 = HD, 4 = GBA style, 8 = Gameboy style
+    apply_sharpness = False     # True = Acerola's edge enhancing matrix
+    custom_spread = 0           # None = Auto-calculate mathematically perfect spread
+    use_palette = False         # True = Extract custom palette from image, False = Uniform quantization
+    pallete_file = "slso8"      # Name of the custom palette to use
     use_octree_pallete = False
     # ---------------------------------------------------------
 
@@ -115,7 +116,7 @@ def shader_acerola(original_image_frame: np.ndarray,
             custom_palette = unsorted_palette[sorted_indices]
         else:
             # Apply hardcoded pallet
-            custom_palette = get_palette("slso8")
+            custom_palette = get_palette(pallete_file)
             actual_colors = len(custom_palette)
 
         flat_palette = custom_palette.flatten()

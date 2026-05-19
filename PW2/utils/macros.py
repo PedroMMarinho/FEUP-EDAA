@@ -17,6 +17,7 @@ else:
 LIB = ctypes.CDLL(str(LIB_PATH.resolve()))
 ALGORITHMS = [
     "Octree-Baseline",
+    "Octree-Mapping",
     "Median-Cut",
     "K-Means",
     "SOM",

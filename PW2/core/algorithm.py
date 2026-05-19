@@ -25,6 +25,8 @@ def run_algorithm(algo: str, original_image_frame: np.ndarray, target_colors: in
             return octree_kmeans(original_image_frame, target_colors)
         case "Octree-Live":
             return octree_quantize_live(original_image_frame, target_colors)
+        case "Octree-Mapping":
+            return octree_mapping(original_image_frame, target_colors)
         case "Shader-Acerola":
             return shader_acerola(original_image_frame, target_colors)
         case _:
@@ -167,6 +169,20 @@ def octree_baseline(original_image_frame: np.ndarray, target_colors: int) -> np.
     pixel_ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
     LIB.octree_quantize_baseline(pixel_ptr, total_original_image_frame, target_colors)
     return original_image_frame
+
+LIB.octree_quantize_mapping.restype  = None
+LIB.octree_quantize_mapping.argtypes = [
+    ctypes.POINTER(ctypes.c_uint8),   # original_image_frame
+    ctypes.c_int,                     # total_original_image_frame
+    ctypes.c_int,                     # target_colors
+]
+
+def octree_mapping(original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
+    total_original_image_frame = original_image_frame.shape[0] * original_image_frame.shape[1]
+    pixel_ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+    LIB.octree_quantize_mapping(pixel_ptr, total_original_image_frame, target_colors)
+    return original_image_frame
+
 
 def median_cut(original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
     quantized_array = (original_image_frame >> 3) << 3

@@ -383,40 +383,61 @@ extern "C" {
 
     // Baseline Algorithm
     EXPORT void octree_quantize_baseline(unsigned char* pixels, int num_pixels, int max_colors) {
-    OctreeQuantizer quantizer(max_colors);
-    
-    for (int i = 0; i < num_pixels; ++i) {
-        Color c = {pixels[i*3], pixels[i*3+1], pixels[i*3+2]};
-        quantizer.addColor(c);
-    }
-    
-    std::vector<Color> palette = quantizer.getPalette();
-    int P = (int)palette.size();
-
-    std::vector<int> pal_flat(P * 3);
-    for (int j = 0; j < P; ++j) {
-        pal_flat[j*3]   = palette[j].r;
-        pal_flat[j*3+1] = palette[j].g;
-        pal_flat[j*3+2] = palette[j].b;
-    }
-
-    #pragma omp parallel for schedule(static)
-    for (int i = 0; i < num_pixels; ++i) {
-        int pr = pixels[i*3], pg = pixels[i*3+1], pb = pixels[i*3+2];
-        int best = 0, bestD = INT32_MAX;
-        for (int j = 0; j < P; ++j) {
-            int dr = pr - pal_flat[j*3];
-            int dg = pg - pal_flat[j*3+1];
-            int db = pb - pal_flat[j*3+2];
-            int d  = dr*dr + dg*dg + db*db;
-            if (d < bestD) { bestD = d; best = j; }
-            if (bestD == 0) break; 
+        OctreeQuantizer quantizer(max_colors);
+        
+        for (int i = 0; i < num_pixels; ++i) {
+            Color c = {pixels[i*3], pixels[i*3+1], pixels[i*3+2]};
+            quantizer.addColor(c);
         }
-        pixels[i*3]   = pal_flat[best*3];
-        pixels[i*3+1] = pal_flat[best*3+1];
-        pixels[i*3+2] = pal_flat[best*3+2];
+        
+        std::vector<Color> palette = quantizer.getPalette();
+        int P = (int)palette.size();
+
+        std::vector<int> pal_flat(P * 3);
+        for (int j = 0; j < P; ++j) {
+            pal_flat[j*3]   = palette[j].r;
+            pal_flat[j*3+1] = palette[j].g;
+            pal_flat[j*3+2] = palette[j].b;
+        }
+
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < num_pixels; ++i) {
+            int pr = pixels[i*3], pg = pixels[i*3+1], pb = pixels[i*3+2];
+            int best = 0, bestD = INT32_MAX;
+            for (int j = 0; j < P; ++j) {
+                int dr = pr - pal_flat[j*3];
+                int dg = pg - pal_flat[j*3+1];
+                int db = pb - pal_flat[j*3+2];
+                int d  = dr*dr + dg*dg + db*db;
+                if (d < bestD) { bestD = d; best = j; }
+                if (bestD == 0) break; 
+            }
+            pixels[i*3]   = pal_flat[best*3];
+            pixels[i*3+1] = pal_flat[best*3+1];
+            pixels[i*3+2] = pal_flat[best*3+2];
+        }
     }
-}
+
+    EXPORT void octree_quantize_mapping(unsigned char* pixels, int num_pixels, int max_colors) {
+        OctreeQuantizer quantizer(max_colors);
+        
+        for (int i = 0; i < num_pixels; ++i) {
+            Color c = {pixels[i*3], pixels[i*3+1], pixels[i*3+2]};
+            quantizer.addColor(c);
+        }
+        
+        std::vector<Color> palette = quantizer.getPalette();
+        
+        
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < num_pixels; ++i) {
+            Color c = {pixels[i*3], pixels[i*3+1], pixels[i*3+2]};
+            int idx = quantizer.getMappedIndex(c);
+            pixels[i*3]   = palette[idx].r;
+            pixels[i*3+1] = palette[idx].g;
+            pixels[i*3+2] = palette[idx].b;
+        }
+    }
 
     // Image info for CSV logging
    EXPORT double calculate_exact_color_difference(const uint8_t* pixels, int num_pixels) {

@@ -136,7 +136,7 @@ def generate_ssim_charts(df: pd.DataFrame, output_dir: Path) -> None:
             ordered_handles,
             legend_order,
             loc="lower center",
-            ncol=min(len(legend_order),
+            ncol=len(legend_order),
             bbox_to_anchor=(0.5, -0.05),
             frameon=False,
             handletextpad=0.5,

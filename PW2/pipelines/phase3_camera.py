@@ -75,6 +75,7 @@ class LiveQuantizationApp:
     def camera_worker_loop(self):
         """This runs entirely in the background, smashing through frames as fast as possible."""
         cap = cv2.VideoCapture(0)
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         prev_time = time.time()
 
         while self.running:

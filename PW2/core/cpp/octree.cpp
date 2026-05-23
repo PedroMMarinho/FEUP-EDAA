@@ -401,8 +401,8 @@ extern "C" {
     // Live Quantization #
 
 
-    // Baseline Algorithm
-    EXPORT void octree_quantize_baseline(unsigned char* pixels, int num_pixels, int max_colors) {
+    // Euclidean Algorithm
+    EXPORT void octree_quantize_euclidean(unsigned char* pixels, int num_pixels, int max_colors) {
         OctreeQuantizer quantizer(max_colors);
         
         for (int i = 0; i < num_pixels; ++i) {
@@ -437,8 +437,8 @@ extern "C" {
             pixels[i*3+2] = pal_flat[best*3+2];
         }
     }
-
-    EXPORT void octree_quantize_mapping(unsigned char* pixels, int num_pixels, int max_colors) {
+    // Baseline Algorithm
+    EXPORT void octree_quantize_baseline(unsigned char* pixels, int num_pixels, int max_colors) {
         OctreeQuantizer quantizer(max_colors);
         
         for (int i = 0; i < num_pixels; ++i) {

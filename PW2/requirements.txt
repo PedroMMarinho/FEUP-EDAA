@@ -10,3 +10,4 @@ dxcam
 pyvirtualcam
 imageio[ffmpeg]
 tqdm
+scikit-image

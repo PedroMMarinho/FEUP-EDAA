@@ -85,7 +85,8 @@ def run(input_path: Path, output_base: Path, target_colors: int, output_csv_path
     least_colors = 8
 
     for algo in ALGORITHMS:
-       
+        if "Uniform" != algo:
+            continue
         current_colors = least_colors
         while current_colors <= target_colors:
             final_colors = None

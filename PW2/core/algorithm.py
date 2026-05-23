@@ -15,6 +15,8 @@ def run_algorithm(algo: str, original_image_frame: np.ndarray, target_colors: in
             return octree_baseline(original_image_frame, target_colors)
         case "Median-Cut":
             return median_cut(original_image_frame, target_colors)
+        case "Uniform":
+            return uniform_quantize(original_image_frame, target_colors)
         case "K-Means":
             return kmeans(original_image_frame, target_colors)
         case "SOM":
@@ -58,6 +60,14 @@ LIB.extract_octree_palette.argtypes = [
     ctypes.c_int,                   # height
     ctypes.c_int,                   # maxColors
     ctypes.POINTER(ctypes.c_uint8)  # out_palette (pre-allocated buffer)
+]
+
+LIB.uniform_quantize.restype = None
+LIB.uniform_quantize.argtypes = [
+    ctypes.POINTER(ctypes.c_uint8), # pixels
+    ctypes.c_int,                   # width
+    ctypes.c_int,                   # height
+    ctypes.c_int,                   # target_colors
 ]
 
 
@@ -195,6 +205,13 @@ def median_cut(original_image_frame: np.ndarray, target_colors: int) -> np.ndarr
     ).convert('RGB')
 
     return np.array(res, dtype=np.uint8)
+
+
+def uniform_quantize(original_image_frame: np.ndarray, target_colors: int) -> np.ndarray:
+    h, w = original_image_frame.shape[:2]
+    ptr = original_image_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+    LIB.uniform_quantize(ptr, w, h, target_colors)
+    return original_image_frame
 
 LIB.kmeans_quantize.restype  = None
 LIB.kmeans_quantize.argtypes = [

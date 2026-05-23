@@ -265,6 +265,26 @@ extern "C" {
         }
     }
 
+    // Plain uniform quantization without dithering.
+    EXPORT void uniform_quantize(uint8_t* pixels, int width, int height, int target_colors) {
+        if (target_colors < 2) target_colors = 2;
+
+        int steps_per_channel = static_cast<int>(std::round(std::cbrt(static_cast<float>(target_colors))));
+        if (steps_per_channel < 2) steps_per_channel = 2;
+
+        float step_factor = steps_per_channel - 1.0f;
+        int total_pixels = width * height;
+
+        for (int i = 0; i < total_pixels; ++i) {
+            int idx = i * 3;
+            for (int c = 0; c < 3; ++c) {
+                float color = pixels[idx + c] / 255.0f;
+                float quantized = std::floor(step_factor * color + 0.5f) / step_factor;
+                pixels[idx + c] = static_cast<uint8_t>(std::round(quantized * 255.0f));
+            }
+        }
+    }
+
     // MODE 2: CUSTOM PALETTE (Palette Provided)
     // Maps grayscale luminance to a 1D color palette array.
     EXPORT void acerola_dither_palette(uint8_t* pixels, int width, int height, uint8_t* palette, int palette_size, float spread) {

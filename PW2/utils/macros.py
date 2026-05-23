@@ -19,6 +19,7 @@ ALGORITHMS = [
     "Octree-Baseline",
     "Octree-Mapping",
     "Median-Cut",
+    "Uniform",
     "K-Means",
     "SOM",
     "Octree-SOM",

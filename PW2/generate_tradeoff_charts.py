@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
 import pandas as pd
-from adjustText import adjust_text
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -24,24 +23,12 @@ def format_image_name(image_name: str) -> str:
     return image_name.replace("_", " ").title()
 
 
-def pareto_frontier(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute the Pareto frontier for a single (image, resolution) slice."""
-    ordered = df.sort_values(["Time Taken (ms)", "SSIM"], ascending=[True, False]).reset_index(drop=True)
-
-    frontier_indices: list[int] = []
-    best_ssim = -np.inf
-    for index, row in ordered.iterrows():
-        if row["SSIM"] > best_ssim:
-            frontier_indices.append(index)
-            best_ssim = row["SSIM"]
-
-    return ordered.loc[frontier_indices].copy()
-
-
 def calculate_tradeoff_rank(df: pd.DataFrame) -> pd.DataFrame:
     ranked_chunks = []
 
-    group_cols = ["Image Name", "Resolution"] if "Resolution" in df.columns else ["Image Name"]
+    group_cols = ["Target Colors"]
+    if "Resolution" in df.columns:
+        group_cols.insert(0, "Resolution")
 
     for group_keys, group in df.groupby(group_cols):
         group = group.copy()
@@ -68,133 +55,107 @@ def calculate_tradeoff_rank(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def generate_tradeoff_charts(df: pd.DataFrame, output_dir: Path) -> None:
-    """Receive an already-filtered (Target Colors == 256) and ranked dataframe."""
-    stat_path = output_dir / "tradeoff_charts_256"
+    """Receive an already-ranked dataframe summarized by resolution and target colors."""
+    stat_path = output_dir / "tradeoff_charts"
     stat_path.mkdir(parents=True, exist_ok=True)
 
     if df.empty:
         print("Warning: No data to chart. Skipping.")
         return
 
-    has_resolution = "Resolution" in df.columns
-    group_cols = ["Image Name", "Resolution"] if has_resolution else ["Image Name"]
-
-    # df is already aggregated + ranked by main(); use it directly
     ranked_df = df
 
-    unique_targets = ranked_df[group_cols].drop_duplicates()
+    has_resolution = "Resolution" in ranked_df.columns
+    if has_resolution:
+        resolution_order = ranked_df["Resolution"].dropna().astype(str).unique().tolist()
+    else:
+        resolution_order = [None]
 
     print("Generating tradeoff charts...")
 
-    for _, target in unique_targets.iterrows():
-        image_name = target["Image Name"]
-
-        # Build the mask for this exact (image, resolution) slice
-        mask = ranked_df["Image Name"] == image_name
+    for resolution in resolution_order:
         if has_resolution:
-            resolution = target["Resolution"]
-            mask &= ranked_df["Resolution"] == resolution
+            resolution_df = ranked_df[ranked_df["Resolution"].astype(str) == resolution].copy()
+        else:
+            resolution_df = ranked_df.copy()
 
-        image_df = ranked_df[mask].copy()
-
-        if image_df.empty:
+        if resolution_df.empty:
             continue
 
-        # Pareto frontier computed once, for this single slice only
-        frontier_df = pareto_frontier(image_df)
-
-        best_row = image_df[image_df["Rank"] == 1].iloc[0]
-
-        chart_title_suffix = f""
-        safe_name_suffix = f"_{resolution}" if has_resolution else ""
+        target_order = sorted(resolution_df["Target Colors"].dropna().astype(int).unique().tolist())
+        algorithm_order = (
+            resolution_df.groupby("Algorithm")["Rank"].mean().sort_values(ascending=True).index.tolist()
+        )
+        algorithm_colors = {
+            algorithm: plt.cm.tab10(index % 10)
+            for index, algorithm in enumerate(algorithm_order)
+        }
 
         plt.style.use("seaborn-v0_8-whitegrid")
-        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        fig, ax = plt.subplots(1, 1, figsize=(14, 7))
 
-        unique_algs = image_df["Algorithm"].unique()
-        color_palette = cm.get_cmap("tab20")(np.linspace(0, 1, len(unique_algs)))
-        color_map = dict(zip(unique_algs, color_palette))
-        point_colors = [color_map[alg] for alg in image_df["Algorithm"]]
+        group_width = 0.8
+        x_positions = np.arange(len(target_order)) * 1.6
+        max_bars = max(1, len(algorithm_order))
+        bar_width = group_width / max_bars
 
-        ax.scatter(
-            image_df["Time Taken (ms)"],
-            image_df["SSIM"],
-            s=130,
-            c=point_colors,
-            alpha=0.9,
-            edgecolor="white",
-            linewidth=1,
-            zorder=3,
-        )
+        for target_color, x_position in zip(target_order, x_positions):
+            color_df = resolution_df[resolution_df["Target Colors"] == target_color].copy()
+            color_df = color_df.sort_values(["Rank", "Algorithm"], ascending=[True, True]).reset_index(drop=True)
 
-        if len(frontier_df) > 1:
-            ax.plot(
-                frontier_df["Time Taken (ms)"],
-                frontier_df["SSIM"],
-                color="#2563eb",
-                linewidth=2.0,
-                linestyle="--",
-                zorder=2,
-                label="Pareto Frontier",
-            )
+            values = color_df["Rank"].tolist()
+            algorithms = color_df["Algorithm"].tolist()
+            total_width = bar_width * len(values)
+            start = x_position - total_width / 2 + bar_width / 2
 
-        ax.scatter(
-            best_row["Time Taken (ms)"],
-            best_row["SSIM"],
-            s=450,
-            marker="*",
-            facecolors="none",
-            edgecolor="black",
-            linewidth=1.5,
-            zorder=4,
-            label=f"Best Overall ({best_row['Algorithm']})",
-        )
-
-        texts = []
-        for _, row in image_df.iterrows():
-            is_best = row["Rank"] == 1
-            texts.append(
-                ax.text(
-                    row["Time Taken (ms)"],
-                    row["SSIM"],
-                    row["Algorithm"],
-                    fontsize=10 if not is_best else 12,
-                    fontweight="bold" if is_best else "normal",
-                    color="#1f2937",
-                    zorder=5,
+            for bar_index, (algorithm, rank_value) in enumerate(zip(algorithms, values)):
+                left = start + bar_index * bar_width
+                ax.bar(
+                    left,
+                    rank_value,
+                    width=bar_width,
+                    color=algorithm_colors[algorithm],
+                    align="center",
+                    edgecolor="none",
+                    label=algorithm if target_color == target_order[0] else "",
+                    zorder=3,
                 )
-            )
 
-        adjust_text(texts, expand_points=(1.8, 1.8))
-
-        ax.set_xscale("log")
-        ax.set_xlabel("Avg Time Taken (ms)", fontsize=12, fontweight="medium")
-        ax.set_ylabel("Avg SSIM", fontsize=12, fontweight="medium")
-        ax.grid(True, which="major", axis="both", linestyle="-", alpha=0.4)
-        ax.grid(True, which="minor", axis="x", linestyle=":", alpha=0.2)
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels(target_order, rotation=0)
+        ax.set_title("Ranked by Pareto Score", pad=15)
+        ax.set_xlabel("Target Colors")
+        ax.set_ylabel("Rank (1 = best tradeoff)")
+        ax.grid(axis="y", linestyle="--", alpha=0.7)
+        ax.grid(axis="x", visible=False)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
-        display_name = format_image_name(str(image_name))
-        fig.suptitle(
-            f"Algorithm Tradeoff (256 Colors): {display_name}{chart_title_suffix}",
-            fontsize=16,
-            fontweight="bold",
-            y=0.96,
+        if has_resolution:
+            fig.suptitle(f"Pareto Ranking: {resolution}", fontsize=16, fontweight="bold", y=1.02)
+        else:
+            fig.suptitle("Pareto Ranking", fontsize=16, fontweight="bold", y=1.02)
+
+        legend_order = [algorithm for algorithm in algorithm_order if algorithm in algorithm_colors]
+        ordered_handles = [plt.Rectangle((0, 0), 1, 1, color=algorithm_colors[algorithm]) for algorithm in legend_order]
+        fig.legend(
+            ordered_handles,
+            legend_order,
+            loc="lower center",
+            ncol=len(legend_order),
+            bbox_to_anchor=(0.5, -0.03),
+            frameon=False,
+            handletextpad=0.5,
         )
 
-        legend = ax.legend(loc="lower right", frameon=True, fontsize=10)
-        legend.get_frame().set_alpha(0.9)
-        legend.get_frame().set_edgecolor("#e5e7eb")
+        fig.subplots_adjust(top=0.86)
 
-        fig.tight_layout()
-
-        safe_name = Path(str(image_name)).stem
-        output_file = stat_path / f"{safe_name}{safe_name_suffix}_tradeoff_chart_256.png"
+        safe_resolution = str(resolution).replace("/", "_") if resolution is not None else "all_resolutions"
+        output_file = stat_path / f"{safe_resolution}_tradeoff_chart.png"
         plt.savefig(output_file, bbox_inches="tight", dpi=300, facecolor="white")
         plt.close()
 
-        print(f"Generated: {output_file.name} | Best tradeoff: {best_row['Algorithm']}")
+        print(f"Generated: {output_file.name}")
 
 
 def main() -> None:
@@ -225,16 +186,18 @@ def main() -> None:
     df = df[df["Algorithm"] != "Shader-Acerola"].copy()
 
     df["Target Colors"] = pd.to_numeric(df["Target Colors"], errors="coerce")
-    df = df[df["Target Colors"] == 256].copy()
+    df = df.dropna(subset=["Target Colors"]).copy()
 
     if df.empty:
-        print("No data found for Target Colors = 256. Exiting.")
+        print("No data found for Target Colors. Exiting.")
         return
 
     has_resolution = "Resolution" in df.columns
-    group_cols = ["Image Name", "Resolution"] if has_resolution else ["Image Name"]
+    group_cols = ["Target Colors"]
+    if has_resolution:
+        group_cols.insert(0, "Resolution")
 
-    print("Aggregating data by Algorithm for 256 colors...")
+    print("Aggregating data by Algorithm for all target colors and resolutions...")
     agg_df = (
         df.groupby(group_cols + ["Algorithm"], as_index=False)
         .agg(
@@ -249,7 +212,7 @@ def main() -> None:
     ranked_df = calculate_tradeoff_rank(agg_df)
     ranked_df = ranked_df.sort_values(by=group_cols + ["Rank"])
 
-    output_csv_path = charts_dir / "ranked_benchmarks_256.csv"
+    output_csv_path = charts_dir / "ranked_benchmarks.csv"
     charts_dir.mkdir(parents=True, exist_ok=True)
     ranked_df.to_csv(output_csv_path, index=False)
     print(f"Saved ranked data to: {output_csv_path}")

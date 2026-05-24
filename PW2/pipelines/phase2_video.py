@@ -33,7 +33,7 @@ def process_video(input_path: str | Path, target_colors: int) -> None:
 
     print(f"Total Frames to process: {total_frames} @ {fps} FPS")
     # Algorithm being used
-    algo = "Octree-SOM"  
+    algo = "Octree-Baseline"  
     
     while cap.isOpened():
         ret, frame = cap.read()

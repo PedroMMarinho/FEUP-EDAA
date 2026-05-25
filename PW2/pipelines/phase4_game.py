@@ -77,9 +77,11 @@ class GhostOverlayApp:
     def refresh_windows(self):
         titles = [t for t in gw.getAllTitles() if t.strip()]
         self.window_cb['values'] = titles
-        if titles: 
-            self.window_cb.current(0)
-            self.current_target = titles[0]
+        if self.current_target in titles:
+            self.window_cb.set(self.current_target)
+        else:
+            self.window_cb.set("")
+            self.current_target = ""
 
     def on_change(self, event):
         self.current_algo = self.algo_cb.get()
@@ -217,8 +219,10 @@ class GhostOverlayApp:
             fps = 1.0 / (current_time - prev_time) if (current_time - prev_time) > 0 else 0
             prev_time = current_time
 
-            #cv2.rectangle(final_frame, (capture_w - 120, 10), (capture_w - 10, 50), (0, 0, 0), -1)
-            cv2.putText(final_frame, f"FPS: {int(fps)}", (capture_w - 110, 60), 
+            frame_h, frame_w = final_frame.shape[:2]
+
+            #cv2.rectangle(final_frame, (frame_w - 120, 10), (frame_w - 10, 50), (0, 0, 0), -1)
+            cv2.putText(final_frame, f"FPS: {int(fps)}", (frame_w - 110, 60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
             t_cv2 = time.perf_counter()
@@ -250,7 +254,7 @@ class GhostOverlayApp:
                 vcam_ms = (t_vcam_end - t_vcam) * 1000
                 total_loop_ms = 1000.0 / fps if fps > 0 else 0
                 
-                #print(f"[Worker] DXCam: {dx_ms:.1f}ms | C++ Math: {cpp_ms:.1f}ms | NP Copy: {numpy_convert_ms:.1f}ms | OpenCV: {cv2_ms:.1f}ms | VCam: {vcam_ms:.1f}ms | Loop: {total_loop_ms:.1f}ms")
+                print(f"[Worker] DXCam: {dx_ms:.1f}ms | C++ Math: {cpp_ms:.1f}ms | NP Copy: {numpy_convert_ms:.1f}ms | OpenCV: {cv2_ms:.1f}ms | VCam: {vcam_ms:.1f}ms | Loop: {total_loop_ms:.1f}ms")
             
         if camera.is_capturing: camera.stop()
 

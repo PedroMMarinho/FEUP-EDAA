@@ -237,30 +237,32 @@ extern "C" {
         if (steps_per_channel < 2) steps_per_channel = 2;
         float step_factor = steps_per_channel - 1.0f;
 
+        // Precompute LUT for all 64 Bayer matrix values and 256 pixel values
+        uint8_t lut[64][256];
+        for (int b = 0; b < 64; b++) {
+            float bayer_val = (bayer8[b] / 64.0f) - 0.5f;
+            for (int v = 0; v < 256; v++) {
+                float color = v / 255.0f;
+                color += spread * bayer_val;
+                
+                if (color < 0.0f) color = 0.0f;
+                if (color > 1.0f) color = 1.0f;
+
+                float quantized = std::floor(step_factor * color + 0.5f) / step_factor;
+                lut[b][v] = static_cast<uint8_t>(quantized * 255.0f);
+            }
+        }
+
+        #pragma omp parallel for
         for (int y = 0; y < height; y++) {
+            int bayer_y = (y % 8) * 8;
             for (int x = 0; x < width; x++) {
                 int idx = (y * width + x) * 3;
+                int bayer_idx = (x % 8) + bayer_y;
 
-                // Step 1: Get the dither noise value for this specific screen coordinate.
-                // We divide by 64.0f to normalize the matrix [0 to 63] down to [0.0 to 1.0].
-                // We subtract 0.5f to center the noise around 0 [-0.5 to 0.5].
-                int bayer_idx = (x % 8) + (y % 8) * 8;
-                float bayer_val = (bayer8[bayer_idx] / 64.0f) - 0.5f;
-
-                // Process Red, Green, and Blue independently
-                for (int c = 0; c < 3; c++) {
-                    float color = pixels[idx + c] / 255.0f;     // Normalize to [0.0, 1.0]
-                    color += spread * bayer_val;                // Step 2: Add dither noise
-                    
-                    if (color < 0.0f) color = 0.0f;             // Clamp limits
-                    if (color > 1.0f) color = 1.0f;
-
-                    // Step 3: Compress the color palette (Quantization)
-                    // Multiply by steps, round to nearest integer, divide by steps.
-                    float quantized = std::floor(step_factor * color + 0.5f) / step_factor;
-
-                    pixels[idx + c] = static_cast<uint8_t>(quantized * 255.0f); // Map back to 0-255
-                }
+                pixels[idx]     = lut[bayer_idx][pixels[idx]];
+                pixels[idx + 1] = lut[bayer_idx][pixels[idx + 1]];
+                pixels[idx + 2] = lut[bayer_idx][pixels[idx + 2]];
             }
         }
     }
@@ -275,13 +277,17 @@ extern "C" {
         float step_factor = steps_per_channel - 1.0f;
         int total_pixels = width * height;
 
-        for (int i = 0; i < total_pixels; ++i) {
-            int idx = i * 3;
-            for (int c = 0; c < 3; ++c) {
-                float color = pixels[idx + c] / 255.0f;
-                float quantized = std::floor(step_factor * color + 0.5f) / step_factor;
-                pixels[idx + c] = static_cast<uint8_t>(std::round(quantized * 255.0f));
-            }
+        uint8_t lut[256];
+        for (int v = 0; v < 256; ++v) {
+            float color = v / 255.0f;
+            float quantized = std::floor(step_factor * color + 0.5f) / step_factor;
+            lut[v] = static_cast<uint8_t>(std::round(quantized * 255.0f));
+        }
+
+        for (int i = 0; i < total_pixels * 3; i += 3) {
+            pixels[i]   = lut[pixels[i]];
+            pixels[i+1] = lut[pixels[i+1]];
+            pixels[i+2] = lut[pixels[i+2]];
         }
     }
 
@@ -290,33 +296,47 @@ extern "C" {
     EXPORT void acerola_dither_palette(uint8_t* pixels, int width, int height, uint8_t* palette, int palette_size, float spread) {
         if (palette_size < 2) return; 
 
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int idx = (y * width + x) * 3;
+        // Precompute luminance multipliers
+        uint32_t r_lut[256], g_lut[256], b_lut[256];
+        for (int i = 0; i < 256; i++) {
+            r_lut[i] = std::round((0.299f * i / 255.0f) * 65536.0f);
+            g_lut[i] = std::round((0.587f * i / 255.0f) * 65536.0f);
+            b_lut[i] = std::round((0.114f * i / 255.0f) * 65536.0f);
+        }
 
-                // Step 1: Get dither noise
-                int bayer_idx = (x % 8) + (y % 8) * 8;
-                float bayer_val = (bayer8[bayer_idx] / 64.0f) - 0.5f;
-
-                // Step 2: Convert RGB to Grayscale (Luminance)
-                float r = pixels[idx] / 255.0f;
-                float g = pixels[idx + 1] / 255.0f;
-                float b = pixels[idx + 2] / 255.0f;
-                float luminance = (0.299f * r) + (0.587f * g) + (0.114f * b);
-
-                // Step 3: Add dither noise to the grayscale value
+        // Precompute dithering to palette index
+        uint8_t pal_lut[64][256];
+        for (int b = 0; b < 64; b++) {
+            float bayer_val = (bayer8[b] / 64.0f) - 0.5f;
+            for (int v = 0; v < 256; v++) {
+                float luminance = v / 255.0f;
                 luminance += spread * bayer_val;
 
                 if (luminance < 0.0f) luminance = 0.0f;
                 if (luminance > 1.0f) luminance = 1.0f;
 
-                // Step 4: Map the noisy grayscale value to a palette index
-                // A luminance of 0.0 picks the first color, 1.0 picks the last color.
                 int palette_index = static_cast<int>(std::round(luminance * (palette_size - 1)));
-
-                // Safety bounds check
                 if (palette_index < 0) palette_index = 0;
                 if (palette_index >= palette_size) palette_index = palette_size - 1;
+                
+                pal_lut[b][v] = static_cast<uint8_t>(palette_index);
+            }
+        }
+
+        #pragma omp parallel for
+        for (int y = 0; y < height; y++) {
+            int bayer_y = (y % 8) * 8;
+            for (int x = 0; x < width; x++) {
+                int idx = (y * width + x) * 3;
+
+                // Step 1 & 2: Integer grayscale calculation mapped to 0-255
+                uint32_t lum_int = r_lut[pixels[idx]] + g_lut[pixels[idx + 1]] + b_lut[pixels[idx + 2]];
+                uint32_t lum_8bit = lum_int >> 8; 
+                if (lum_8bit > 255) lum_8bit = 255;
+
+                // Step 3 & 4: Lookup palette index using dither noise
+                int bayer_idx = (x % 8) + bayer_y;
+                int palette_index = pal_lut[bayer_idx][lum_8bit];
 
                 // Step 5: Overwrite the pixel with the chosen color from the palette
                 int pal_idx = palette_index * 3;

@@ -34,7 +34,7 @@ class GhostOverlayApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Quantizer Controls")
-        self.root.geometry("300x150")
+        self.root.geometry("300x180")
         self.root.attributes("-topmost", True)
         
         self.current_algo = ALGORITHMS[0]
@@ -61,6 +61,9 @@ class GhostOverlayApp:
         self.window_cb = ttk.Combobox(root, state="readonly")
         self.window_cb.pack()
         self.refresh_windows()
+
+        self.use_half_res = tk.BooleanVar(value=False)
+        ttk.Checkbutton(root, text="Half-Res Processing", variable=self.use_half_res).pack(pady=(5,0))
 
         ttk.Button(root, text="Run FPS Benchmark", command=self.start_benchmark).pack(pady=(10,0))
         self.benchmark_mode = False
@@ -211,23 +214,31 @@ class GhostOverlayApp:
 
             # --- PROFILING: Algorithm & Hidden Conversions ---
             # Fix #1: Force contiguous memory BEFORE the timer so C++ doesn't have to copy it
-            frame_rgb = np.ascontiguousarray(frame_rgb)
+            is_half_res = self.use_half_res.get()
+            if is_half_res:
+                process_frame = cv2.resize(frame_rgb, (capture_w // 2, capture_h // 2), interpolation=cv2.INTER_NEAREST)
+                process_frame = np.ascontiguousarray(process_frame)
+            else:
+                process_frame = np.ascontiguousarray(frame_rgb)
 
             t_algo_start = time.perf_counter()
             try:
                 # 1. Time the actual C++ execution
-                processed_pil = run_algorithm(algo, frame_rgb, colors)
+                processed_pil = run_algorithm(algo, process_frame, colors)
                 t_cpp_end = time.perf_counter() 
 
                 if processed_pil is None: 
-                    final_frame = frame_rgb
+                    final_frame = process_frame
                 else:
                     # 2. Time the PIL -> NumPy conversion penalty
                     final_frame = np.array(processed_pil)
                     
             except Exception as e:
-                final_frame = frame_rgb
+                final_frame = process_frame
                 t_cpp_end = time.perf_counter()
+                
+            if is_half_res:
+                final_frame = cv2.resize(final_frame, (capture_w, capture_h), interpolation=cv2.INTER_NEAREST)
                 
             t_algo_end = time.perf_counter()
 
@@ -238,8 +249,8 @@ class GhostOverlayApp:
             frame_h, frame_w = final_frame.shape[:2]
 
             #cv2.rectangle(final_frame, (frame_w - 120, 10), (frame_w - 10, 50), (0, 0, 0), -1)
-            cv2.putText(final_frame, f"FPS: {int(fps)}", (frame_w - 110, 60), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            #cv2.putText(final_frame, f"FPS: {int(fps)}", (frame_w - 110, 60), 
+            #            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
             t_cv2 = time.perf_counter()
             cv2.imshow(self.overlay_title, cv2.cvtColor(final_frame, cv2.COLOR_RGB2BGR))
@@ -259,18 +270,18 @@ class GhostOverlayApp:
             t_vcam_end = time.perf_counter()
             
             self.frame_count += 1
-            if self.frame_count % 60 == 0:
-                dx_ms = (t_dx_end - t_dx) * 1000
-                
-                # Split the algo time into Math vs Conversion
-                cpp_ms = (t_cpp_end - t_algo_start) * 1000
-                numpy_convert_ms = (t_algo_end - t_cpp_end) * 1000
-                
-                cv2_ms = (t_cv2_end - t_cv2) * 1000
-                vcam_ms = (t_vcam_end - t_vcam) * 1000
-                total_loop_ms = 1000.0 / fps if fps > 0 else 0
-                
-                print(f"[Worker] DXCam: {dx_ms:.1f}ms | C++ Math: {cpp_ms:.1f}ms | NP Copy: {numpy_convert_ms:.1f}ms | OpenCV: {cv2_ms:.1f}ms | VCam: {vcam_ms:.1f}ms | Loop: {total_loop_ms:.1f}ms")
+            #if self.frame_count % 60 == 0:
+            #    dx_ms = (t_dx_end - t_dx) * 1000
+            #    
+            #    # Split the algo time into Math vs Conversion
+            #    cpp_ms = (t_cpp_end - t_algo_start) * 1000
+            #    numpy_convert_ms = (t_algo_end - t_cpp_end) * 1000
+            #    
+            #    cv2_ms = (t_cv2_end - t_cv2) * 1000
+            #    vcam_ms = (t_vcam_end - t_vcam) * 1000
+            #    total_loop_ms = 1000.0 / fps if fps > 0 else 0
+            #    
+            #    print(f"[Worker] DXCam: {dx_ms:.1f}ms | C++ Math: {cpp_ms:.1f}ms | NP Copy: {numpy_convert_ms:.1f}ms | OpenCV: {cv2_ms:.1f}ms | VCam: {vcam_ms:.1f}ms | Loop: {total_loop_ms:.1f}ms")
             
         if camera.is_capturing: camera.stop()
 
@@ -285,9 +296,12 @@ class GhostOverlayApp:
                 print(f"Benchmarking {algo} @ {colors} colors...")
                 
                 # Warmup frames
+                is_half_res = self.use_half_res.get()
                 for _ in range(10):
                     frame_rgb = camera.grab()
                     if frame_rgb is not None:
+                        if is_half_res:
+                            frame_rgb = cv2.resize(frame_rgb, (w // 2, h // 2), interpolation=cv2.INTER_NEAREST)
                         frame_rgb = np.ascontiguousarray(frame_rgb)
                         try:
                             run_algorithm(algo, frame_rgb, colors)
@@ -306,11 +320,15 @@ class GhostOverlayApp:
                         time.sleep(0.01)
                         continue
                         
-                    frame_rgb = np.ascontiguousarray(frame_rgb)
+                    if is_half_res:
+                        process_frame = cv2.resize(frame_rgb, (w // 2, h // 2), interpolation=cv2.INTER_NEAREST)
+                        process_frame = np.ascontiguousarray(process_frame)
+                    else:
+                        process_frame = np.ascontiguousarray(frame_rgb)
                     
                     t_cpp_start = time.perf_counter()
                     try:
-                        processed_pil = run_algorithm(algo, frame_rgb, colors)
+                        processed_pil = run_algorithm(algo, process_frame, colors)
                     except Exception:
                         processed_pil = None
                     t_cpp_end = time.perf_counter()
@@ -318,7 +336,10 @@ class GhostOverlayApp:
                     if processed_pil is not None:
                         final_frame = np.array(processed_pil)
                     else:
-                        final_frame = frame_rgb
+                        final_frame = process_frame
+                        
+                    if is_half_res:
+                        final_frame = cv2.resize(final_frame, (w, h), interpolation=cv2.INTER_NEAREST)
                         
                     # Emulate standard pipeline flow
                     cv2.imshow(self.overlay_title, cv2.cvtColor(final_frame, cv2.COLOR_RGB2BGR))

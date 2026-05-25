@@ -77,7 +77,7 @@ def shader_acerola(original_image_frame: np.ndarray,
     
     # ---------------------------------------------------------
     # TWEAKABLE FIELDS
-    pixel_scale = 2             # 1 = HD, 4 = GBA style, 8 = Gameboy style
+    pixel_scale = 1             # 1 = HD, 4 = GBA style, 8 = Gameboy style
     apply_sharpness = False     # True = Acerola's edge enhancing matrix
     custom_spread = 0           # None = Auto-calculate mathematically perfect spread
     use_palette = False         # True = Extract custom palette from image, False = Uniform quantization

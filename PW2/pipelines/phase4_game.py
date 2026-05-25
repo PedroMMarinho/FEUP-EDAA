@@ -6,9 +6,10 @@ import tkinter as tk
 from tkinter import ttk
 import ctypes
 import cv2
+import pandas as pd
 
-from pipelines.phase1_image import run_algorithm
-from utils.macros import ALGORITHMS 
+from pipelines.phase1_image import run_algorithm, get_next_csv_path
+from utils.macros import ALGORITHMS, OUTPUT_STATS_DIR 
 
 if sys.platform == "win32":
     import pygetwindow as gw
@@ -61,6 +62,9 @@ class GhostOverlayApp:
         self.window_cb.pack()
         self.refresh_windows()
 
+        ttk.Button(root, text="Run FPS Benchmark", command=self.start_benchmark).pack(pady=(10,0))
+        self.benchmark_mode = False
+
         self.algo_cb.bind("<<ComboboxSelected>>", self.on_change)
         self.color_cb.bind("<<ComboboxSelected>>", self.on_change)
         self.window_cb.bind("<<ComboboxSelected>>", self.on_window_change)
@@ -70,6 +74,13 @@ class GhostOverlayApp:
         self.overlay_title = "GhostGameOverlay_1337"
         self.capture_thread = threading.Thread(target=self.screen_worker_loop, daemon=False)
         self.capture_thread.start()
+
+    def start_benchmark(self):
+        if not self.current_target:
+            print("Please select a target game first to start capturing.")
+            return
+        print("Benchmark requested... Waiting for capture loop to begin sequence.")
+        self.benchmark_mode = True
 
     def on_window_change(self, event):
         self.current_target = self.window_cb.get()
@@ -180,6 +191,11 @@ class GhostOverlayApp:
                     self.vcam = pyvirtualcam.Camera(width=capture_w, height=capture_h, fps=60)
                     print(f"Virtual Camera locked to game resolution: {capture_w}x{capture_h}")
 
+                if self.benchmark_mode:
+                    self.run_benchmark(camera, capture_w, capture_h)
+                    self.benchmark_mode = False
+                    continue
+
             except Exception:
                 time.sleep(0.01)
                 continue
@@ -257,6 +273,87 @@ class GhostOverlayApp:
                 print(f"[Worker] DXCam: {dx_ms:.1f}ms | C++ Math: {cpp_ms:.1f}ms | NP Copy: {numpy_convert_ms:.1f}ms | OpenCV: {cv2_ms:.1f}ms | VCam: {vcam_ms:.1f}ms | Loop: {total_loop_ms:.1f}ms")
             
         if camera.is_capturing: camera.stop()
+
+    def run_benchmark(self, camera, w, h):
+        print(f"\n--- Starting Live FPS Benchmark ({w}x{h}) ---")
+        results = []
+        colors_to_test = [8, 16, 32, 64, 128, 256]
+        frames_per_test = 60 # Run 60 frames per configuration
+        
+        for algo in ALGORITHMS:
+            for colors in colors_to_test:
+                print(f"Benchmarking {algo} @ {colors} colors...")
+                
+                # Warmup frames
+                for _ in range(10):
+                    frame_rgb = camera.grab()
+                    if frame_rgb is not None:
+                        frame_rgb = np.ascontiguousarray(frame_rgb)
+                        try:
+                            run_algorithm(algo, frame_rgb, colors)
+                        except Exception:
+                            pass
+                
+                total_cpp_ms = 0
+                total_loop_ms = 0
+                valid_frames = 0
+                
+                for _ in range(frames_per_test):
+                    t_loop_start = time.perf_counter()
+                    
+                    frame_rgb = camera.grab()
+                    if frame_rgb is None:
+                        time.sleep(0.01)
+                        continue
+                        
+                    frame_rgb = np.ascontiguousarray(frame_rgb)
+                    
+                    t_cpp_start = time.perf_counter()
+                    try:
+                        processed_pil = run_algorithm(algo, frame_rgb, colors)
+                    except Exception:
+                        processed_pil = None
+                    t_cpp_end = time.perf_counter()
+                    
+                    if processed_pil is not None:
+                        final_frame = np.array(processed_pil)
+                    else:
+                        final_frame = frame_rgb
+                        
+                    # Emulate standard pipeline flow
+                    cv2.imshow(self.overlay_title, cv2.cvtColor(final_frame, cv2.COLOR_RGB2BGR))
+                    cv2.waitKey(1)
+                    if self.vcam is not None:
+                        self.vcam.send(final_frame)
+                    
+                    t_loop_end = time.perf_counter()
+                    
+                    total_cpp_ms += (t_cpp_end - t_cpp_start) * 1000
+                    total_loop_ms += (t_loop_end - t_loop_start) * 1000
+                    valid_frames += 1
+                
+                if valid_frames > 0:
+                    avg_cpp_ms = total_cpp_ms / valid_frames
+                    avg_full_ms = total_loop_ms / valid_frames
+                    avg_fps = 1000.0 / avg_full_ms if avg_full_ms > 0 else 0
+                    
+                    results.append({
+                        'Resolution': f"{w}x{h}",
+                        'Algorithm': algo,
+                        'Colors': colors,
+                        'Avg FPS': avg_fps,
+                        'Avg Full Loop (ms)': avg_full_ms,
+                        'Avg C++ Math (ms)': avg_cpp_ms
+                    })
+                    print(f"  -> {avg_fps:.1f} FPS | Math: {avg_cpp_ms:.1f} ms | Loop: {avg_full_ms:.1f} ms")
+                    
+        out_dir = OUTPUT_STATS_DIR / "camera_fps"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = get_next_csv_path(out_dir, "live_camera_fps")
+        
+        df = pd.DataFrame(results)
+        df.to_csv(out_path, index=False)
+        print(f"\n--- Benchmark Complete! Saved to {out_path.name} ---")
 
     def on_closing(self):
         self.running = False

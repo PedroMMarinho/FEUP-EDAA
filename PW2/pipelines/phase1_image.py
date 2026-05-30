@@ -77,7 +77,7 @@ def run(input_path: Path, output_base: Path, target_colors: int, output_csv_path
     clean_name = input_path.stem
     resolution = get_image_resolution(input_path)
     original_colors = get_image_color_count(input_path)
-    n_run_times = 1
+    n_run_times = 10
 
     original_image = load_image_data(input_path)
 
@@ -85,7 +85,6 @@ def run(input_path: Path, output_base: Path, target_colors: int, output_csv_path
     least_colors = 8
 
     for algo in ALGORITHMS:
-       
         current_colors = least_colors
         while current_colors <= target_colors:
             final_colors = None
@@ -131,11 +130,15 @@ def run(input_path: Path, output_base: Path, target_colors: int, output_csv_path
     else:
         results.to_csv(output_csv_path, mode='w', header=True, index=False)
 
-def generate_statistics_charts():    
+def generate_statistics_charts(csv_file: str = None):    
     stat_path = OUTPUT_STATS_DIR / "image_charts"
     stat_path.mkdir(parents=True, exist_ok=True)
 
-    csv_file = OUTPUT_CSV_DIR / "benchmark_stats_final.csv"
+    if csv_file is None:
+        csv_file = OUTPUT_CSV_DIR / "benchmark_stats_final_v2.csv"
+    else:
+        csv_file = OUTPUT_CSV_DIR / csv_file
+        
     if not csv_file.exists():
         print(f"Error: CSV file '{csv_file}' not found. Please run the benchmark first.")
         return

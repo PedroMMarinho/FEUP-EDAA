@@ -2,6 +2,7 @@
 IMG ?= assets/input/raw_images/sipi/4.2.03.tiff
 VID ?= assets/input/raw_videos/test_set/foreman_cif.y4m
 DIR ?= assets/input/raw_images/test_set/
+CSV ?= benchmark_stats_final_v2.csv
 COLORS ?= 256
 
 # Compiler settings
@@ -32,7 +33,7 @@ phase1-all:
 
 phase1-stats:
 	@echo "Generating statistical plots..."
-	python main.py --phase 1 --stats
+	python main.py --phase 1 --stats --input $(CSV)
 
 phase2:
 	@echo "Running Phase 2 (Video Quantization)..."

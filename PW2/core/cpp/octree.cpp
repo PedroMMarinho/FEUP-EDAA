@@ -19,6 +19,12 @@
     #define EXPORT __attribute__((visibility("default")))
 #endif
 
+// K-means Octree Hybrid Quantizer Implementation
+struct OctreeLeaf {
+    float r, g, b;
+    int pixelCount;
+};
+
 struct Color {
     int r, g, b;
 };
@@ -152,6 +158,20 @@ private:
         }
     }
 
+    void collectWeightedLeaves(OctreeNode* node, std::vector<OctreeLeaf>& out) {
+        if (!node) return;
+        if (node->isLeaf) {
+            out.push_back({
+                (float)(node->sumR) / node->colorCount,
+                (float)(node->sumG) / node->colorCount,
+                (float)(node->sumB) / node->colorCount,
+                node->colorCount
+            });
+        } else {
+            for (int i = 0; i < 8; ++i) collectWeightedLeaves(node->children[i], out);
+        }
+    }
+
 public:
     OctreeQuantizer(int maxColors) : maxColors(maxColors) {}
 
@@ -179,6 +199,12 @@ public:
         return palette;
     }
 
+    std::vector<OctreeLeaf> getWeightedLeaves() {
+        std::vector<OctreeLeaf> out;
+        collectWeightedLeaves(root, out);
+        return out;
+    }
+
     int getMappedIndex(const Color& color) {
         return quantizeColor(root, color, 0);
     }
@@ -190,7 +216,160 @@ static int g_pal_size = 0;
 static int g_frame_count = 0;
 static int g_refresh_every = 30; 
 
+// For accerola shadder
+static const int bayer8[8 * 8] = {
+    0, 32, 8, 40, 2, 34, 10, 42,
+    48, 16, 56, 24, 50, 18, 58, 26,  
+    12, 44,  4, 36, 14, 46,  6, 38, 
+    60, 28, 52, 20, 62, 30, 54, 22,  
+    3, 35, 11, 43,  1, 33,  9, 41,  
+    51, 19, 59, 27, 49, 17, 57, 25, 
+    15, 47,  7, 39, 13, 45,  5, 37, 
+    63, 31, 55, 23, 61, 29, 53, 21
+};
+
+
 extern "C" {
+    // Accerola Shader
+    // MODE 1: UNIFORM RGB (No Palette Provided)
+    // Calculates nearest colors mathematically per-channel.
+    EXPORT void acerola_dither_uniform(uint8_t* pixels, int width, int height, int steps_per_channel, float spread) {
+        if (steps_per_channel < 2) steps_per_channel = 2;
+        float step_factor = steps_per_channel - 1.0f;
+
+        // Precompute LUT for all 64 Bayer matrix values and 256 pixel values
+        uint8_t lut[64][256];
+        for (int b = 0; b < 64; b++) {
+            float bayer_val = (bayer8[b] / 64.0f) - 0.5f;
+            for (int v = 0; v < 256; v++) {
+                float color = v / 255.0f;
+                color += spread * bayer_val;
+                
+                if (color < 0.0f) color = 0.0f;
+                if (color > 1.0f) color = 1.0f;
+
+                float quantized = std::floor(step_factor * color + 0.5f) / step_factor;
+                lut[b][v] = static_cast<uint8_t>(quantized * 255.0f);
+            }
+        }
+
+        #pragma omp parallel for
+        for (int y = 0; y < height; y++) {
+            int bayer_y = (y % 8) * 8;
+            for (int x = 0; x < width; x++) {
+                int idx = (y * width + x) * 3;
+                int bayer_idx = (x % 8) + bayer_y;
+
+                pixels[idx]     = lut[bayer_idx][pixels[idx]];
+                pixels[idx + 1] = lut[bayer_idx][pixels[idx + 1]];
+                pixels[idx + 2] = lut[bayer_idx][pixels[idx + 2]];
+            }
+        }
+    }
+
+    // Plain uniform quantization without dithering.
+    EXPORT void uniform_quantize(uint8_t* pixels, int width, int height, int target_colors) {
+        if (target_colors < 2) target_colors = 2;
+
+        int steps_per_channel = static_cast<int>(std::round(std::cbrt(static_cast<float>(target_colors))));
+        if (steps_per_channel < 2) steps_per_channel = 2;
+
+        float step_factor = steps_per_channel - 1.0f;
+        int total_pixels = width * height;
+
+        uint8_t lut[256];
+        for (int v = 0; v < 256; ++v) {
+            float color = v / 255.0f;
+            float quantized = std::floor(step_factor * color + 0.5f) / step_factor;
+            lut[v] = static_cast<uint8_t>(std::round(quantized * 255.0f));
+        }
+
+        for (int i = 0; i < total_pixels * 3; i += 3) {
+            pixels[i]   = lut[pixels[i]];
+            pixels[i+1] = lut[pixels[i+1]];
+            pixels[i+2] = lut[pixels[i+2]];
+        }
+    }
+
+    // MODE 2: CUSTOM PALETTE (Palette Provided)
+    // Maps grayscale luminance to a 1D color palette array.
+    EXPORT void acerola_dither_palette(uint8_t* pixels, int width, int height, uint8_t* palette, int palette_size, float spread) {
+        if (palette_size < 2) return; 
+
+        // Precompute luminance multipliers
+        uint32_t r_lut[256], g_lut[256], b_lut[256];
+        for (int i = 0; i < 256; i++) {
+            r_lut[i] = std::round((0.299f * i / 255.0f) * 65536.0f);
+            g_lut[i] = std::round((0.587f * i / 255.0f) * 65536.0f);
+            b_lut[i] = std::round((0.114f * i / 255.0f) * 65536.0f);
+        }
+
+        // Precompute dithering to palette index
+        uint8_t pal_lut[64][256];
+        for (int b = 0; b < 64; b++) {
+            float bayer_val = (bayer8[b] / 64.0f) - 0.5f;
+            for (int v = 0; v < 256; v++) {
+                float luminance = v / 255.0f;
+                luminance += spread * bayer_val;
+
+                if (luminance < 0.0f) luminance = 0.0f;
+                if (luminance > 1.0f) luminance = 1.0f;
+
+                int palette_index = static_cast<int>(std::round(luminance * (palette_size - 1)));
+                if (palette_index < 0) palette_index = 0;
+                if (palette_index >= palette_size) palette_index = palette_size - 1;
+                
+                pal_lut[b][v] = static_cast<uint8_t>(palette_index);
+            }
+        }
+
+        #pragma omp parallel for
+        for (int y = 0; y < height; y++) {
+            int bayer_y = (y % 8) * 8;
+            for (int x = 0; x < width; x++) {
+                int idx = (y * width + x) * 3;
+
+                // Step 1 & 2: Integer grayscale calculation mapped to 0-255
+                uint32_t lum_int = r_lut[pixels[idx]] + g_lut[pixels[idx + 1]] + b_lut[pixels[idx + 2]];
+                uint32_t lum_8bit = lum_int >> 8; 
+                if (lum_8bit > 255) lum_8bit = 255;
+
+                // Step 3 & 4: Lookup palette index using dither noise
+                int bayer_idx = (x % 8) + bayer_y;
+                int palette_index = pal_lut[bayer_idx][lum_8bit];
+
+                // Step 5: Overwrite the pixel with the chosen color from the palette
+                int pal_idx = palette_index * 3;
+                pixels[idx]     = palette[pal_idx];
+                pixels[idx + 1] = palette[pal_idx + 1];
+                pixels[idx + 2] = palette[pal_idx + 2];
+            }
+        }
+    }
+    // Use for custom pallet extraction
+    EXPORT int extract_octree_palette(uint8_t* pixels, int width, int height, int maxColors, uint8_t* out_palette) {
+        OctreeQuantizer octree(maxColors);
+        int total_pixels = width * height;
+        
+        for (int i = 0; i < total_pixels; i++) {
+            Color c = { pixels[i * 3], pixels[i * 3 + 1], pixels[i * 3 + 2] };
+            octree.addColor(c);
+        }
+
+        std::vector<Color> palette = octree.getPalette();
+        int actual_colors = palette.size();
+
+        for (int i = 0; i < actual_colors; i++) {
+            out_palette[i * 3]     = palette[i].r;
+            out_palette[i * 3 + 1] = palette[i].g;
+            out_palette[i * 3 + 2] = palette[i].b;
+        }
+
+        return actual_colors;
+    }
+    
+
+
     // Live Quantization #
     EXPORT void build_octree_palette(unsigned char* pixels, int num_pixels, int max_colors) {
         OctreeQuantizer quantizer(max_colors);
@@ -242,42 +421,63 @@ extern "C" {
     // Live Quantization #
 
 
+    // Euclidean Algorithm
+    EXPORT void octree_quantize_euclidean(unsigned char* pixels, int num_pixels, int max_colors) {
+        OctreeQuantizer quantizer(max_colors);
+        
+        for (int i = 0; i < num_pixels; ++i) {
+            Color c = {pixels[i*3], pixels[i*3+1], pixels[i*3+2]};
+            quantizer.addColor(c);
+        }
+        
+        std::vector<Color> palette = quantizer.getPalette();
+        int P = (int)palette.size();
+
+        std::vector<int> pal_flat(P * 3);
+        for (int j = 0; j < P; ++j) {
+            pal_flat[j*3]   = palette[j].r;
+            pal_flat[j*3+1] = palette[j].g;
+            pal_flat[j*3+2] = palette[j].b;
+        }
+
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < num_pixels; ++i) {
+            int pr = pixels[i*3], pg = pixels[i*3+1], pb = pixels[i*3+2];
+            int best = 0, bestD = INT32_MAX;
+            for (int j = 0; j < P; ++j) {
+                int dr = pr - pal_flat[j*3];
+                int dg = pg - pal_flat[j*3+1];
+                int db = pb - pal_flat[j*3+2];
+                int d  = dr*dr + dg*dg + db*db;
+                if (d < bestD) { bestD = d; best = j; }
+                if (bestD == 0) break; 
+            }
+            pixels[i*3]   = pal_flat[best*3];
+            pixels[i*3+1] = pal_flat[best*3+1];
+            pixels[i*3+2] = pal_flat[best*3+2];
+        }
+    }
     // Baseline Algorithm
     EXPORT void octree_quantize_baseline(unsigned char* pixels, int num_pixels, int max_colors) {
-    OctreeQuantizer quantizer(max_colors);
-    
-    for (int i = 0; i < num_pixels; ++i) {
-        Color c = {pixels[i*3], pixels[i*3+1], pixels[i*3+2]};
-        quantizer.addColor(c);
-    }
-    
-    std::vector<Color> palette = quantizer.getPalette();
-    int P = (int)palette.size();
-
-    std::vector<int> pal_flat(P * 3);
-    for (int j = 0; j < P; ++j) {
-        pal_flat[j*3]   = palette[j].r;
-        pal_flat[j*3+1] = palette[j].g;
-        pal_flat[j*3+2] = palette[j].b;
-    }
-
-    #pragma omp parallel for schedule(static)
-    for (int i = 0; i < num_pixels; ++i) {
-        int pr = pixels[i*3], pg = pixels[i*3+1], pb = pixels[i*3+2];
-        int best = 0, bestD = INT32_MAX;
-        for (int j = 0; j < P; ++j) {
-            int dr = pr - pal_flat[j*3];
-            int dg = pg - pal_flat[j*3+1];
-            int db = pb - pal_flat[j*3+2];
-            int d  = dr*dr + dg*dg + db*db;
-            if (d < bestD) { bestD = d; best = j; }
-            if (bestD == 0) break; 
+        OctreeQuantizer quantizer(max_colors);
+        
+        for (int i = 0; i < num_pixels; ++i) {
+            Color c = {pixels[i*3], pixels[i*3+1], pixels[i*3+2]};
+            quantizer.addColor(c);
         }
-        pixels[i*3]   = pal_flat[best*3];
-        pixels[i*3+1] = pal_flat[best*3+1];
-        pixels[i*3+2] = pal_flat[best*3+2];
+        
+        std::vector<Color> palette = quantizer.getPalette();
+        
+        
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < num_pixels; ++i) {
+            Color c = {pixels[i*3], pixels[i*3+1], pixels[i*3+2]};
+            int idx = quantizer.getMappedIndex(c);
+            pixels[i*3]   = palette[idx].r;
+            pixels[i*3+1] = palette[idx].g;
+            pixels[i*3+2] = palette[idx].b;
+        }
     }
-}
 
     // Image info for CSV logging
    EXPORT double calculate_exact_color_difference(const uint8_t* pixels, int num_pixels) {
@@ -608,4 +808,108 @@ extern "C" {
         }
     }
 
+    // Octree-K-Means Algorithm
+    EXPORT void octree_kmeans_quantize(uint8_t* pixels, int width, int height,
+                                   int K, int max_iter, uint32_t seed)
+    {
+    int n = width * height;
+
+    // ── Step 1: Build Octree with MORE colors than K ────────────────────────
+    // 4096 is a great sweet spot. It's enough to capture all the detail, 
+    int max_tree_leaves = std::max(K * 32, 4096); 
+    OctreeQuantizer quantizer(max_tree_leaves);
+    
+    for (int i = 0; i < n; ++i) {
+        quantizer.addColor({pixels[i*3], pixels[i*3+1], pixels[i*3+2]});
+    }
+
+    std::vector<OctreeLeaf> leaves = quantizer.getWeightedLeaves();
+    int num_leaves = (int)leaves.size();
+
+    std::vector<float> centroids(K * 3);
+    std::mt19937 rng(seed);
+    
+    std::vector<OctreeLeaf> sorted_leaves = leaves;
+    std::sort(sorted_leaves.begin(), sorted_leaves.end(), 
+              [](const OctreeLeaf& a, const OctreeLeaf& b) { return a.pixelCount > b.pixelCount; });
+
+    for (int i = 0; i < K; ++i) {
+        if (i < num_leaves) {
+            centroids[i*3+0] = sorted_leaves[i].r;
+            centroids[i*3+1] = sorted_leaves[i].g;
+            centroids[i*3+2] = sorted_leaves[i].b;
+        } else { 
+            std::uniform_real_distribution<float> rand_color(0.0f, 255.0f);
+            centroids[i*3+0] = rand_color(rng);
+            centroids[i*3+1] = rand_color(rng);
+            centroids[i*3+2] = rand_color(rng);
+        }
+    }
+
+    // ── Step 3: Fast Weighted K-Means on Leaves ─────────────────
+    std::vector<int> leaf_labels(num_leaves, 0);
+    std::vector<float> new_centroids(K * 3);
+    std::vector<int> counts(K);
+
+    for (int iter = 0; iter < max_iter; ++iter) {
+        bool changed = false;
+
+        for (int i = 0; i < num_leaves; ++i) {
+            float best_dist = std::numeric_limits<float>::max();
+            int best_k = 0;
+            for (int j = 0; j < K; ++j) {
+                float dr = leaves[i].r - centroids[j*3+0];
+                float dg = leaves[i].g - centroids[j*3+1];
+                float db = leaves[i].b - centroids[j*3+2];
+                float d = dr*dr + dg*dg + db*db;
+                if (d < best_dist) { best_dist = d; best_k = j; }
+            }
+            if (leaf_labels[i] != best_k) { leaf_labels[i] = best_k; changed = true; }
+        }
+
+        if (!changed) break;
+
+        std::fill(new_centroids.begin(), new_centroids.end(), 0.0f);
+        std::fill(counts.begin(), counts.end(), 0);
+
+        for (int i = 0; i < num_leaves; ++i) {
+            int j = leaf_labels[i];
+            int weight = leaves[i].pixelCount;
+            new_centroids[j*3+0] += leaves[i].r * weight;
+            new_centroids[j*3+1] += leaves[i].g * weight;
+            new_centroids[j*3+2] += leaves[i].b * weight;
+            counts[j] += weight;
+        }
+
+        for (int j = 0; j < K; ++j) {
+            if (counts[j] > 0) {
+                centroids[j*3+0] = new_centroids[j*3+0] / counts[j];
+                centroids[j*3+1] = new_centroids[j*3+1] / counts[j];
+                centroids[j*3+2] = new_centroids[j*3+2] / counts[j];
+            }
+        }
+    }
+
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < n; ++i) {
+        float r = (float)pixels[i*3+0];
+        float g = (float)pixels[i*3+1];
+        float b = (float)pixels[i*3+2];
+
+        float best_dist = std::numeric_limits<float>::max();
+        int best_k = 0;
+
+        for (int j = 0; j < K; ++j) {
+            float dr = r - centroids[j*3+0];
+            float dg = g - centroids[j*3+1];
+            float db = b - centroids[j*3+2];
+            float d = dr*dr + dg*dg + db*db;
+            if (d < best_dist) { best_dist = d; best_k = j; }
+        }
+
+        pixels[i*3+0] = (uint8_t)(centroids[best_k*3+0] + 0.5f);
+        pixels[i*3+1] = (uint8_t)(centroids[best_k*3+1] + 0.5f);
+        pixels[i*3+2] = (uint8_t)(centroids[best_k*3+2] + 0.5f);
+    }
+  }
 } // extern "C"

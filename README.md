@@ -1,6 +1,9 @@
 # EDAA 2025/2026
 
-EDAA Assignments of group G02.
+EDAA Assignments of group G02:
+
+- **PW1 Presentation of the Fibonacci Heap Data Structure**
+- **PW2 Real-Time Color Quantization Using Octree Structures for Memory-Efficient Image and Video Processing**
 
 ## Group Members
 
